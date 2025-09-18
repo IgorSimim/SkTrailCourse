@@ -9,7 +9,7 @@ var kernel = Kernel.CreateBuilder()
 // “Memória” persistida em JSON
 var store = new JsonMemoryStore("data"); // pasta data/ com .json
 var tasks = new TaskPlugin(store);
-var notes = new NotesPlugin(store);
+var notes = new NotesPlugin(store, new DeterministicSummarizer());
 
 // Registrando plugins no Kernel
 kernel.ImportPluginFromObject(tasks, "Tasks");
@@ -33,7 +33,7 @@ while (true)
     if (input.Equals("exit", StringComparison.OrdinalIgnoreCase) ||
         input.Equals("quit", StringComparison.OrdinalIgnoreCase)) break;
 
-    var (plugin, functionName, args) = router.Route(input);
+    var (plugin, functionName, skArgs) = router.Route(input);
 
     if (plugin is null || functionName is null)
     {
@@ -43,7 +43,7 @@ while (true)
 
     try
     {
-        var result = await kernel.InvokeAsync(plugin, functionName, args);
+    var result = await kernel.InvokeAsync(plugin, functionName, skArgs);
         Console.WriteLine(result?.ToString());
     }
     catch (Exception ex)

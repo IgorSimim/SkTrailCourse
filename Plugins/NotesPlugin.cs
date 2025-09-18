@@ -7,9 +7,14 @@ namespace SkOfflineCourse.Plugins;
 public class NotesPlugin
 {
     private readonly JsonMemoryStore _store;
+    private readonly ISummarizer _summarizer;
     private const string Key = "notes";
 
-    public NotesPlugin(JsonMemoryStore store) => _store = store;
+    public NotesPlugin(JsonMemoryStore store, ISummarizer? summarizer = null)
+    {
+        _store = store;
+        _summarizer = summarizer ?? new DeterministicSummarizer();
+    }
 
     public record Note(string Content, DateTime CreatedAt);
 
@@ -45,16 +50,13 @@ public class NotesPlugin
             found.Select(x => $"{x.idx}. {Trim(x.note.Content, 80)}"));
     }
 
-    [KernelFunction, Description("Resumo curto e determinístico da nota (sem LLM)")]
+    [KernelFunction, Description("Resumo curto (via ISummarizer, sem LLM)")]
     public async Task<string> SummarizeNote([Description("Índice da nota (1-based)")] int index)
     {
         var list = await _store.LoadListAsync<Note>(Key);
         if (index < 1 || index > list.Count) return "❌ Índice inválido.";
         var text = list[index - 1].Content;
-
-        // “Resumo” determinístico: pega 1ª frase ou até 120 chars + “...”
-        var dot = text.IndexOf('.', StringComparison.Ordinal);
-        string summary = dot > 0 ? text[..(dot+1)] : Trim(text, 120);
+        var summary = _summarizer.Summarize(text, 120);
         return $"🧾 Resumo: {summary}";
     }
 
