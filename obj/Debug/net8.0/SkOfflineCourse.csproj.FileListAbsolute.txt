@@ -1,0 +1,5 @@
+/Users/danilo.perez/projects/invillia/SkOfflineCourse/obj/Debug/net8.0/SkOfflineCourse.csproj.AssemblyReference.cache
+/Users/danilo.perez/projects/invillia/SkOfflineCourse/obj/Debug/net8.0/SkOfflineCourse.GeneratedMSBuildEditorConfig.editorconfig
+/Users/danilo.perez/projects/invillia/SkOfflineCourse/obj/Debug/net8.0/SkOfflineCourse.AssemblyInfoInputs.cache
+/Users/danilo.perez/projects/invillia/SkOfflineCourse/obj/Debug/net8.0/SkOfflineCourse.AssemblyInfo.cs
+/Users/danilo.perez/projects/invillia/SkOfflineCourse/obj/Debug/net8.0/SkOfflineCourse.csproj.CoreCompileInputs.cache
