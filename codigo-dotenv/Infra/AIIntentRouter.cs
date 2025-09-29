@@ -13,8 +13,12 @@ public class AIIntentRouter
         _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
         _pluginFunctions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
         {
-            { "Tasks", new List<string> { "AddTask", "ListTasks", "CompleteTask", "RecommendNext" } },
-            { "Notes", new List<string> { "AddNote", "ListNotes", "SearchNotes", "SummarizeNote" } }
+            { "Disputes", new List<string>
+                { "AddDispute", "ListDisputes", "UpdateDisputeStatus", "DeleteDispute", "ShowDispute", "AnalyzeDispute" }
+            },
+            { "Support", new List<string>
+                { "CheckTransaction", "GetRefundPolicy", "ContactSupport", "GenerateReport" }
+            }
         };
     }
 
@@ -28,145 +32,163 @@ public class AIIntentRouter
         try
         {
             var prompt = @$"
-Você é um assistente especializado em identificar intenções de usuários e rotear comandos para funções adequadas.
+Você é um assistente especializado em identificar intenções de usuários relacionadas a disputas financeiras, cobranças indevidas e suporte ao cliente.
 
 Analise a entrada do usuário e determine qual função deve ser chamada de acordo com as seguintes opções disponíveis:
 
-Plugin Tasks:
-- AddTask: Adiciona uma tarefa (parâmetro: title)
-- ListTasks: Lista todas as tarefas (sem parâmetros)
-- CompleteTask: Marca uma tarefa como concluída (parâmetro: index - número inteiro)
-- RecommendNext: Sugere a próxima tarefa a ser feita (sem parâmetros)
+Plugin Disputes (Disputas/Reclamações):
+- AddDispute(complaint) - Adicionar nova reclamação
+- ListDisputes() - Listar todas as disputas
+- UpdateDisputeStatus(id, newStatus) - Atualizar status da disputa
+- DeleteDispute(id) - Excluir disputa
+- ShowDispute(id) - Mostrar detalhes de uma disputa
+- AnalyzeDispute(transactionDetails) - Analisar transação suspeita
 
-Plugin Notes:
-- AddNote: Adiciona uma nota (parâmetro: content)
-- ListNotes: Lista todas as notas (sem parâmetros)
-- SearchNotes: Busca notas por um termo (parâmetro: term)
-- SummarizeNote: Gera um resumo de uma nota específica (parâmetro: index - número inteiro)
+Plugin Support (Suporte):
+- CheckTransaction(transactionId) - Verificar detalhes da transação
+- GetRefundPolicy() - Consultar política de reembolso
+- ContactSupport(issue) - Entrar em contato com suporte
+- GenerateReport(period) - Gerar relatório de disputas
 
 Entrada do usuário: {input}
 
-Responda em formato JSON:
+IMPORTANTE: Responda SOMENTE com o objeto JSON.
+NÃO use ```json, nem texto fora do JSON.
+
+Exemplo de resposta correta para disputa:
 {{
-  ""plugin"": ""[nome do plugin: Tasks ou Notes]"",
-  ""function"": ""[nome da função]"",
-  ""parameters"": {{
-    // parâmetros necessários para a função (se houver)
-  }}
+  ""plugin"": ""Disputes"",
+  ""function"": ""AddDispute"",
+  ""parameters"": {{ ""complaint"": ""Não reconheço a cobrança de 39,90 da FitEasy"" }}
 }}
 
-Se a entrada não corresponder a nenhuma função, retorne plugin e function como null.
+Exemplo para verificar transação:
+{{
+  ""plugin"": ""Support"", 
+  ""function"": ""CheckTransaction"",
+  ""parameters"": {{ ""transactionId"": ""TXN12345"" }}
+}}
+
+Exemplo para análise de disputa:
+{{
+  ""plugin"": ""Disputes"",
+  ""function"": ""AnalyzeDispute"", 
+  ""parameters"": {{ ""transactionDetails"": ""Cobrança duplicada da Loja XPTO no valor de R$ 150,00"" }}
+}}
 ";
 
             var result = await _kernel.InvokePromptAsync(prompt);
             var response = result.ToString().Trim();
 
-            // Extrair o JSON da resposta (pode estar envolvido em ```json ... ```)
+            // Limpa markdown se o modelo ignorar instrução
+            response = response
+                .Replace("```json", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("```", "")
+                .Trim();
+
+            // Extrai JSON
             var jsonStart = response.IndexOf('{');
             var jsonEnd = response.LastIndexOf('}');
-            
+
             if (jsonStart >= 0 && jsonEnd > jsonStart)
             {
                 var jsonRaw = response.Substring(jsonStart, jsonEnd - jsonStart + 1);
-                
-                // Tenta fazer o parsing do JSON
-                var options = new JsonSerializerOptions { 
+
+                var options = new JsonSerializerOptions
+                {
                     PropertyNameCaseInsensitive = true,
                     AllowTrailingCommas = true,
                     ReadCommentHandling = JsonCommentHandling.Skip
                 };
-                
-                try 
+
+                try
                 {
                     var routeInfo = JsonSerializer.Deserialize<RouteInfo>(jsonRaw, options);
-                
+
                     if (routeInfo != null && !string.IsNullOrEmpty(routeInfo.Plugin) && !string.IsNullOrEmpty(routeInfo.Function))
                     {
-                        // Verificar se o plugin e função existem
-                        if (_pluginFunctions.TryGetValue(routeInfo.Plugin, out var functions) && 
+                        if (_pluginFunctions.TryGetValue(routeInfo.Plugin, out var functions) &&
                             functions.Contains(routeInfo.Function, StringComparer.OrdinalIgnoreCase))
                         {
-                            // Adicionar parâmetros ao KernelArguments
+                            // Processa parâmetros
                             if (routeInfo.Parameters != null)
                             {
                                 foreach (var param in routeInfo.Parameters)
                                 {
-                                    args[param.Key] = param.Value?.ToString();
+                                    // Índices numéricos para ID
+                                    if (routeInfo.Function is "UpdateDisputeStatus" or "DeleteDispute" or "ShowDispute")
+                                    {
+                                        if (int.TryParse(param.Value?.ToString(), out var idx))
+                                            args[param.Key] = idx;
+                                        else
+                                            args[param.Key] = param.Value?.ToString();
+                                    }
+                                    else
+                                    {
+                                        args[param.Key] = param.Value?.ToString();
+                                    }
                                 }
                             }
-                            
-                            // Tratamentos específicos para parâmetros comuns
-                            if (routeInfo.Function.Equals("AddTask", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("title"))
+
+                            // Fallbacks inteligentes para disputas
+                            if (routeInfo.Function.Equals("AddDispute", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("complaint"))
                             {
-                                // Extrair título da tarefa da entrada do usuário
-                                var title = ExtractContentAfterKeyword(input, "tarefa");
-                                args["title"] = string.IsNullOrWhiteSpace(title) ? "Sem título" : title;
+                                // Extrai automaticamente a reclamação do input
+                                args["complaint"] = ExtractComplaint(input);
                             }
-                            else if (routeInfo.Function.Equals("AddNote", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("content"))
+
+                            if (routeInfo.Function.Equals("AnalyzeDispute", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("transactionDetails"))
                             {
-                                // Extrair conteúdo da nota da entrada do usuário
-                                var content = ExtractContentAfterKeyword(input, "nota");
-                                args["content"] = string.IsNullOrWhiteSpace(content) ? "Vazio" : content;
+                                args["transactionDetails"] = input;
                             }
-                            
+
                             return (routeInfo.Plugin, routeInfo.Function, args);
                         }
                     }
                 }
                 catch (JsonException jex)
                 {
-                    Console.WriteLine($"Erro ao analisar JSON da resposta do modelo: {jex.Message}");
-                    // Tenta limpar o JSON de caracteres problemáticos e tentar novamente
-                    try
-                    {
-                        string cleanedJson = jsonRaw
-                            .Replace("\\", "\\\\")  // Escape backslashes
-                            .Replace("\r", "")      // Remove carriage returns
-                            .Replace("\n", " ")     // Replace newlines with spaces
-                            .Replace("/", "\\/");   // Escape forward slashes
-                            
-                        var routeInfo = JsonSerializer.Deserialize<RouteInfo>(cleanedJson, options);
-                        
-                        if (routeInfo != null && !string.IsNullOrEmpty(routeInfo.Plugin) && !string.IsNullOrEmpty(routeInfo.Function))
-                        {
-                            if (_pluginFunctions.TryGetValue(routeInfo.Plugin, out var functions) && 
-                                functions.Contains(routeInfo.Function, StringComparer.OrdinalIgnoreCase))
-                            {
-                                // Processar parâmetros
-                                if (routeInfo.Parameters != null)
-                                {
-                                    foreach (var param in routeInfo.Parameters)
-                                    {
-                                        args[param.Key] = param.Value?.ToString();
-                                    }
-                                }
-                                
-                                return (routeInfo.Plugin, routeInfo.Function, args);
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Falha na segunda tentativa de parsing do JSON: {ex.Message}");
-                    }
+                    Console.WriteLine($"Erro ao analisar JSON: {jex.Message}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Erro ao rotear com modelo de IA: {ex.Message}");
-            // Sem fallback - se o modelo falhar, retorna null
+            Console.WriteLine($"Erro no roteador: {ex.Message}");
         }
 
         return (null, null, args);
     }
 
-    private string ExtractContentAfterKeyword(string input, string keyword)
+    private string ExtractComplaint(string input)
     {
-        var keywordIndex = input.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
-        if (keywordIndex < 0) return string.Empty;
-        
-        return input[(keywordIndex + keyword.Length)..].Trim();
+        // Palavras-chave que indicam uma reclamação
+        var complaintKeywords = new[]
+        {
+            "não reconheço", "cobrança indevida", "não foi eu", "não autorizei",
+            "cobrança errada", "valor incorreto", "não contratei", "disputa",
+            "reclamação", "problema com cobrança", "estorno", "chargeback"
+        };
+
+        // Se contém palavras-chave de reclamação, usa o input completo
+        if (complaintKeywords.Any(keyword => input.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+        {
+            return input;
+        }
+
+        // Tenta extrair contexto após palavras específicas
+        var contextKeywords = new[] { "reclamação", "disputa", "problema", "erro" };
+        foreach (var keyword in contextKeywords)
+        {
+            var keywordIndex = input.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+            if (keywordIndex >= 0)
+            {
+                return input[(keywordIndex + keyword.Length)..].Trim();
+            }
+        }
+
+        // Fallback: usa o input completo
+        return input;
     }
 
     private class RouteInfo
