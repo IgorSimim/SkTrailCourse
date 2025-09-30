@@ -1,77 +1,122 @@
-# SK Assistant com IA
+# 📌 Zoop AI Analyst – MVP (Semantic Kernel)
 
-Assistente de linha de comando usando **Microsoft Semantic Kernel** com modelos de linguagem de IA locais. O sistema utiliza modelos como Llama 3.1 para entender comandos em linguagem natural e executar tarefas através de plugins.
+Este é um **MVP de assistente inteligente de disputas** construído em **.NET + Microsoft Semantic Kernel**, usando o modelo **Google Gemini** como LLM.
 
-## Funcionalidades
+O objetivo é permitir que clientes registrem **reclamações de cobrança indevida** diretamente no terminal/app. O agente entende a reclamação, aplica regras de negócio (ex.: valor baixo, confiança alta) e decide automaticamente se deve:
 
-- **Gerenciar tarefas com linguagem natural**:
-  - Criar novas tarefas - ex: "Preciso comprar café amanhã"
-  - Listar tarefas pendentes - ex: "Mostre minhas tarefas"
-  - Marcar tarefas como concluídas - ex: "Marquei como concluída a tarefa 2" 
-  - Receber recomendações inteligentes - ex: "O que devo fazer agora?"
+- Abrir um **ticket de disputa**;
+- Aprovar um **reembolso provisório (simulado)**;
+- Escalar para **análise humana**.
 
-- **Gerenciar notas com linguagem natural**:
-  - Salvar anotações - ex: "Anote que a reunião foi adiada para sexta"
-  - Listar suas anotações - ex: "Mostrar todas as minhas notas"
-  - Buscar por conteúdo - ex: "Encontre minhas notas sobre reunião"
-  - Gerar resumos automáticos - ex: "Faça um resumo da nota 2"
+---
 
-- **Recursos técnicos**:
-  - Integração com modelos de IA locais (como Llama 3.1)
-  - Compreensão de linguagem natural para comandos
-  - Armazenamento persistido em `data/*.json` (criado automaticamente)
-  - Plugins registrados como funções do SK (`TaskPlugin`, `NotesPlugin`)
+## 🚀 Funcionalidades
 
-## Estrutura do projeto
+- **Registrar disputas** (texto livre do cliente).
+- **Classificação automática via IA** (NLU com Semantic Kernel).
+- **Aplicação de regras simples**:
+    - Se valor ≤ R$50,00 e confiança alta → aprova reembolso provisório.
+    - Caso contrário → abre ticket para análise.
+- **Gerenciamento de disputas**: listar, mostrar detalhes, atualizar status, remover.
+- **Persistência local em JSON** (pasta `data/`).
+- **Roteador de intents** que entende a entrada do usuário e chama o plugin correto.
+
+---
+
+## 📂 Estrutura dos Arquivos
 
 ```
-Infra/
-  AIIntentRouter.cs        -> Direciona comandos de linguagem natural para funções
-  AISummarizer.cs          -> Implementação de resumo usando IA
-  ISummarizer.cs           -> Interface para resumir textos
-  JsonMemoryStore.cs       -> Persistência de dados em JSON
-Plugins/
-  TaskPlugin.cs            -> Operações de gerenciamento de tarefas
-  NotesPlugin.cs           -> Operações de gerenciamento de notas
-Program.cs                 -> Loop de interação da interface CLI
+/SkTrailCourse
+ ├── Infra/
+ │    └── AIIntentRouter.cs      # Roteador de intents usando IA
+ ├── Plugins/
+ │    ├── DisputePlugin.cs       # Plugin principal de disputas
+ │    └── DisputeOrchestrator.cs # Orquestrador de fluxo (NLU + regras + tickets/refunds simulados)
+ ├── Program.cs                  # Entry point (CLI interativo)
+ ├── data/                       # Armazena disputas em JSON
+ └── README.md                   # Este arquivo
+
 ```
 
-## Configuração do modelo de IA
+---
 
-O projeto está configurado para usar o modelo Llama 3.1 (8B) local através de uma API compatível com OpenAI. Por padrão, ele espera encontrar o modelo em `http://localhost:11434/v1/`.
+## 🔑 Pré-requisitos
 
-Para usar um modelo ou configuração diferente, ajuste as configurações no arquivo `Program.cs`:
+- .NET 8 SDK
+- Conta no Google AI Studio para obter a **API Key do Gemini**.
 
-```csharp
-kernelBuilder.AddOpenAIChatCompletion(
-    modelId: "llama3.1:8b",
-    apiKey: "apiKey",  // Pode não ser necessário para modelos locais
-    httpClient: new HttpClient { 
-        BaseAddress = new Uri("http://localhost:11434/v1/")
-    });
+---
+
+## ⚙️ Configuração
+
+### 1. Criar arquivo `.env`
+
+Na raiz do projeto, crie um arquivo chamado `.env` com o seguinte conteúdo:
+
+```
+GOOGLE_API_KEY=coloque_sua_chave_aqui
+AI_MODEL_ID=gemini-2.5-flash
+
 ```
 
-## Como executar
+- **GOOGLE_API_KEY**: sua chave obtida no Google AI Studio.
+- **AI_MODEL_ID**: modelo do Gemini a ser usado (ex.: `gemini-2.5-flash`, `gemini-1.5-pro`).
+
+### 2. Restaurar pacotes
 
 ```bash
-# Compilar o projeto
-dotnet build
+dotnet restore
 
-# Executar o assistente
-dotnet run
 ```
 
-## Requisitos
+### 3. Rodar o app
 
-- .NET 8.0 ou superior
-- Um modelo de linguagem compatível com a API OpenAI
-  - Pode ser Llama 3.1 ou outro modelo executado localmente
-  - Recomendado: Ollama, llama.cpp ou outra solução que disponibilize uma API REST
+```bash
+dotnet run
 
-## Interação por linguagem natural
+```
 
-O assistente é projetado para entender comandos em linguagem natural. Não é necessário usar comandos específicos - experimente falar naturalmente, como você falaria com um assistente real.
+---
 
-## Licença
+## 💻 Exemplo de Uso no Terminal
 
-Uso educacional/demonstração.
+```
+=== Zoop AI Analyst (MVP) ===
+Digite uma reclamação, exemplo:
+  'Não reconheço a cobrança de 39,90 da FitEasy'
+Comandos:
+  - listar reclamações
+  - mostrar reclamações
+Digite 'sair' para encerrar.
+----------------------------------------
+
+> Não reconheço a cobrança de 39,90 da FitEasy
+📩 Reclamação registrada (id: 1a2b3c4d).
+🤖 Decisão da IA: aprovar_reembolso_provisorio
+Resumo: Ticket T-12345 criado e reembolso provisório R-67890 aprovado (simulado).
+
+> listar reclamações
+6d3381a2 | [Pendente] Não reconheço a cobrança de 39,90 da FitEasy → Ticket criado para análise manual. (em 2025-09-30 18:38:21Z)
+
+> sair
+
+```
+
+---
+
+## 📊 Regras de Negócio (MVP)
+
+- **Disputa válida** → Abre ticket.
+- **Valor ≤ R$50,00 e confiança ≥ 75%** → Aprova reembolso provisório.
+- **Valor alto ou confiança baixa** → Escala para humano.
+
+*(Os valores podem ser ajustados no código do `DisputeOrchestrator.cs`.)*
+
+---
+
+## 📦 Próximos Passos
+
+- 🔒 Integração real com sistema de tickets da Zoop.
+- 💳 Integração com API de reembolsos reais.
+- 📈 Dashboards para monitorar volume de disputas e decisões.
+- 🌐 Interface web (em vez de terminal).

@@ -1,7 +1,7 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.Google;
-using SkOfflineCourse.Infra;
-using SkOfflineCourse.Plugins;
+using SkTrailCourse.Infra;
+using SkTrailCourse.Plugins;
 using System.Text;
 using DotNetEnv;
 

@@ -1,7 +1,7 @@
 using System.Text;
 using Microsoft.SemanticKernel;
 
-namespace SkOfflineCourse.Infra;
+namespace SkTrailCourse.Infra;
 
 /// <summary>
 /// Implementação de ISummarizer usando um modelo de linguagem de IA

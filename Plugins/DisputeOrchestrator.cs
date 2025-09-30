@@ -1,8 +1,8 @@
 using Microsoft.SemanticKernel;
-using SkOfflineCourse.Infra;
+using SkTrailCourse.Infra;
 using System.Text.Json;
 
-namespace SkOfflineCourse.Plugins;
+namespace SkTrailCourse.Plugins;
 
 public class DisputeOrchestrator
 {
