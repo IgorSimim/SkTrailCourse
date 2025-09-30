@@ -4,29 +4,36 @@ namespace SkTrailCourse.Infra;
 
 public class JsonMemoryStore
 {
-    private readonly string _folder;
-    private readonly JsonSerializerOptions _opts = new() { WriteIndented = true };
+    private readonly string _dataDirectory;
 
-    public JsonMemoryStore(string folder)
+    public JsonMemoryStore(string dataDirectory = "data")
     {
-        _folder = folder;
-        Directory.CreateDirectory(_folder);
+        _dataDirectory = dataDirectory;
+        if (!Directory.Exists(_dataDirectory))
+            Directory.CreateDirectory(_dataDirectory);
     }
-
-    private string PathFor(string key) => System.IO.Path.Combine(_folder, $"{key}.json");
 
     public async Task<List<T>> LoadListAsync<T>(string key)
     {
-        var path = PathFor(key);
-        if (!File.Exists(path)) return new List<T>();
-        using var fs = File.OpenRead(path);
-        return await JsonSerializer.DeserializeAsync<List<T>>(fs) ?? new List<T>();
+        var filePath = Path.Combine(_dataDirectory, $"{key}.json");
+        if (!File.Exists(filePath))
+            return new List<T>();
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(filePath);
+            return JsonSerializer.Deserialize<List<T>>(json) ?? new List<T>();
+        }
+        catch
+        {
+            return new List<T>();
+        }
     }
 
-    public async Task SaveListAsync<T>(string key, List<T> items)
+    public async Task SaveListAsync<T>(string key, List<T> list)
     {
-        var path = PathFor(key);
-        using var fs = File.Create(path);
-        await JsonSerializer.SerializeAsync(fs, items, _opts);
+        var filePath = Path.Combine(_dataDirectory, $"{key}.json");
+        var json = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(filePath, json);
     }
 }
