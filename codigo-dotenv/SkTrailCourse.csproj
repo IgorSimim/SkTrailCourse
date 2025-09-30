@@ -9,7 +9,7 @@
 
   <!-- Excluir código de testes do assembly principal -->
   <ItemGroup>
-    <Compile Remove="SkOfflineCourse.Tests/**/*.cs" />
+    <Compile Remove="SkTrailCourse.Tests/**/*.cs" />
   </ItemGroup>
 
   <ItemGroup>
