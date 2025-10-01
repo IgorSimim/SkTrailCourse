@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ZoopApiMock")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a7f3a99aac6f1bf8d6d4d5560af8029e689650af")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+72948cbfcc6ace29fc01fd456e7bb7d06c8495e0")]
 [assembly: System.Reflection.AssemblyProductAttribute("ZoopApiMock")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ZoopApiMock")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
