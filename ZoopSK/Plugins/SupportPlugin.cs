@@ -25,7 +25,7 @@ public class SupportPlugin
     }
 
     [KernelFunction, Description("Gerar relatório simples de disputas")]
-    public string GenerateReport( // Removido async e Task
+    public string GenerateReport(
         [Description("Período (hoje, semana, mes)")] string period = "hoje")
     {
         return $"📊 Relatório {period}: Use o comando 'listar reclamações' para ver as disputas atuais.";

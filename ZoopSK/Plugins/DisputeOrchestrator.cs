@@ -36,6 +36,26 @@ public class DisputeOrchestrator
         );
     }
 
+    // NOVO MÉTODO: Consulta de boletos com interação
+    public async Task<string> HandleBoletoConsultaAsync(string initialInput)
+    {
+        Console.Write("👤 Por favor, informe seu nome completo para consulta: ");
+        var nomeCliente = Console.ReadLine()?.Trim();
+
+        if (string.IsNullOrWhiteSpace(nomeCliente))
+        {
+            return "❌ Nome não informado. Operação cancelada.";
+        }
+
+        Console.WriteLine($"🔍 Consultando boletos para: {nomeCliente}...");
+
+        // Chama o plugin de consulta de boletos
+        var result = await _kernel.InvokeAsync("BoletoLookup", "SearchByCustomerName", 
+            new KernelArguments { ["nomeCliente"] = nomeCliente });
+
+        return result.ToString();
+    }
+
     private async Task<(string? Merchant, int? AmountCents, bool IsDispute, double Confidence)> 
         ExtractInformationWithAI(string customerText)
     {

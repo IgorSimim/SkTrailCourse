@@ -19,6 +19,12 @@ public class AIIntentRouter
 
         var args = new KernelArguments();
 
+        // PRIMEIRO: Verificação direta para consultas de boleto (antes da IA)
+        if (ContainsBoletoKeywords(input))
+        {
+            return ("BoletoLookup", "SearchByCustomerName", new KernelArguments());
+        }
+
         try
         {
             var prompt = @$"
@@ -26,20 +32,37 @@ Analise a entrada do usuário e determine qual função deve ser chamada:
 
 Entrada do usuário: {input}
 
-Opções disponíveis no plugin Disputes:
-- AddDispute(complaint) - Adicionar nova reclamação
-- ListDisputes() - Listar todas as disputas  
-- UpdateDisputeStatus(id, newStatus) - Atualizar status
-- DeleteDispute(id) - Excluir disputa
-- ShowDispute(id) - Mostrar detalhes
+Opções disponíveis:
+- Plugin 'Disputes':
+  • AddDispute(complaint) - Para RECLAMAÇÕES sobre cobranças indevidas, fraudes, problemas com compras
+  • ListDisputes() - Listar todas as disputas  
+  • UpdateDisputeStatus(id, newStatus) - Atualizar status
+  • DeleteDispute(id) - Excluir disputa
+  • ShowDispute(id) - Mostrar detalhes
+
+- Plugin 'BoletoLookup':
+  • SearchByCustomerName(nomeCliente) - Para CONSULTAS de boletos, verificar origem de cobranças, identificar empresas
+
+REGRAS DE DECISÃO:
+- Use 'BoletoLookup' quando o usuário quer SABER a origem de uma cobrança, verificar um boleto, identificar qual empresa emitiu
+- Use 'Disputes' quando o usuário quer RECLAMAR sobre uma cobrança indevida
+
+Exemplos:
+- 'verifiquei uma compra de 150 reais no boleto' → BoletoLookup
+- 'não reconheço essa cobrança no meu extrato' → BoletoLookup  
+- 'quem emitiu esse boleto?' → BoletoLookup
+- 'quero reclamar de uma cobrança indevida' → Disputes
+- 'fraude na minha fatura' → Disputes
 
 Responda SOMENTE com JSON:
 
 {{
-  ""plugin"": ""Disputes"",
+  ""plugin"": ""NomeDoPlugin"",
   ""function"": ""NomeDaFuncao"",
   ""parameters"": {{ ""param1"": ""valor1"", ""param2"": ""valor2"" }}
-}}";
+}}
+
+Use exatamente estes nomes de plugin: 'Disputes' ou 'BoletoLookup'";
 
             var result = await _kernel.InvokePromptAsync(prompt);
             var response = result.ToString().Trim();
@@ -71,6 +94,9 @@ Responda SOMENTE com JSON:
 
                     if (routeInfo != null && !string.IsNullOrEmpty(routeInfo.Plugin) && !string.IsNullOrEmpty(routeInfo.Function))
                     {
+                        // Remove "Plugin " do nome se existir
+                        var cleanPlugin = routeInfo.Plugin.Replace("Plugin ", "").Replace("plugin ", "").Trim();
+
                         // Processa parâmetros
                         if (routeInfo.Parameters != null)
                         {
@@ -86,7 +112,7 @@ Responda SOMENTE com JSON:
                             args["complaint"] = input;
                         }
 
-                        return (routeInfo.Plugin, routeInfo.Function, args);
+                        return (cleanPlugin, routeInfo.Function, args);
                     }
                 }
                 catch (JsonException jex)
@@ -103,6 +129,14 @@ Responda SOMENTE com JSON:
         // Fallback padrão para novas reclamações
         args["complaint"] = input;
         return ("Disputes", "AddDispute", args);
+    }
+
+    private bool ContainsBoletoKeywords(string input)
+    {
+        var boletoKeywords = new[] { "boleto", "boletos", "cobrança", "cobrancas", "compra no", "pagamento", "fatura", "verifiquei", "encontrei", "vi uma", "identifiquei", "qual empresa", "quem emitiu", "origem da", "desse valor", "desta cobrança" };
+        var lowerInput = input.ToLower();
+
+        return boletoKeywords.Any(keyword => lowerInput.Contains(keyword));
     }
 
     private class RouteInfo

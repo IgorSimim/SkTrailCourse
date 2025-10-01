@@ -2,7 +2,7 @@ bin/
 obj/
 **/bin/
 **/obj/
-data/*.json
+data/disputes.json
 *.user
 *.suo
 *.userosscache

@@ -1,4 +1,4 @@
-﻿using Microsoft.SemanticKernel;
+﻿﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.Google;
 using SkTrailCourse.Infra;
 using SkTrailCourse.Plugins;
@@ -37,13 +37,17 @@ catch (Exception ex)
 var kernel = kernelBuilder.Build();
 var store = new JsonMemoryStore("data");
 
-// === Plugins (usando suas classes originais) ===
+// === Plugins ===
 var orchestrator = new DisputeOrchestrator(kernel, store);
 var disputes = new DisputePlugin(store, kernel, orchestrator);
+var boletoLookup = new BoletoLookupPlugin();
+var support = new SupportPlugin();
 
 kernel.ImportPluginFromObject(disputes, "Disputes");
+kernel.ImportPluginFromObject(boletoLookup, "BoletoLookup");
+kernel.ImportPluginFromObject(support, "Support");
 
-// Router (usando sua classe AIIntentRouter original)
+// Router
 var router = new AIIntentRouter(kernel);
 
 Console.WriteLine("=== 🤖 Zoop AI Analyst (MVP) ===");
@@ -51,13 +55,18 @@ Console.WriteLine("Sistema de análise automática de cobranças indevidas");
 Console.WriteLine();
 
 Console.WriteLine("📝 COMO USAR:");
-Console.WriteLine("• Digite uma reclamação sobre cobrança:");
-Console.WriteLine("  Ex: 'Não reconheço a cobrança de 39,90 da FitEasy'");
-Console.WriteLine("  Ex: 'Cobrança indevida da Loja XPTO no valor de R$ 150,00'");
+Console.WriteLine("• CONSULTAR origem de cobrança:");
+Console.WriteLine("  Ex: 'verifiquei uma compra de 150 reais da zoop no meu boleto'");
+Console.WriteLine("  Ex: 'não reconheço essa cobrança no meu extrato'");
+Console.WriteLine("• RECLAMAR de cobrança indevida:");
+Console.WriteLine("  Ex: 'quero reclamar de uma cobrança indevida da Netflix'");
+Console.WriteLine("  Ex: 'fraude na minha fatura'");
 Console.WriteLine();
 
 Console.WriteLine("🔧 COMANDOS DISPONÍVEIS:");
 Console.WriteLine("• 'listar reclamações' - Ver todas as disputas");
+Console.WriteLine("• 'listar minhas cobranças' - Ver todas as cobranças");
+
 Console.WriteLine("• 'mostrar ABC123' - Detalhes de uma disputa");
 Console.WriteLine("• 'atualizar ABC123 para resolvida' - Atualizar status");
 Console.WriteLine("• 'excluir ABC123' - Remover uma disputa");
@@ -81,36 +90,59 @@ while (true)
         break;
     }
 
+    // Comando direto para listar empresas
+    if (input.Equals("listar empresas", StringComparison.OrdinalIgnoreCase))
+    {
+        var result = await kernel.InvokeAsync("BoletoLookup", "ListCompanies");
+        Console.WriteLine("🏢 " + result?.ToString());
+        continue;
+    }
+
+    // Comandos simples diretos (sem IA)
+    if (input.Equals("listar reclamações", StringComparison.OrdinalIgnoreCase) ||
+        input.Equals("listar", StringComparison.OrdinalIgnoreCase))
+    {
+        var listResult = await kernel.InvokeAsync("Disputes", "ListDisputes");
+        Console.WriteLine("📋 " + listResult?.ToString());
+        continue;
+    }
+
     try
     {
-        // Comandos simples diretos (sem IA)
-        if (input.Equals("listar reclamações", StringComparison.OrdinalIgnoreCase) ||
-            input.Equals("listar", StringComparison.OrdinalIgnoreCase))
-        {
-            var listResult = await kernel.InvokeAsync("Disputes", "ListDisputes"); // Mudei para listResult
-            Console.WriteLine("📋 " + listResult?.ToString());
-            continue;
-        }
-
+        Console.WriteLine($"🔍 Analisando: '{input}'");
+        
         // Roteamento inteligente para outros comandos
         var routeResult = await router.RouteAsync(input);
         var plugin = routeResult.plugin;
         var function = routeResult.function;
         var routeArgs = routeResult.args;
 
+        Console.WriteLine($"🎯 Roteado para: {plugin}.{function}");
+
         if (plugin is null || function is null)
         {
             // Fallback: se não entendeu, mostra ajuda
             Console.WriteLine("🤔 Não entendi. Tente:");
-            Console.WriteLine("   • 'Não reconheço cobrança de 39,90 da FitEasy'");
+            Console.WriteLine("   • 'verifiquei uma compra no boleto' (para CONSULTAR origem)");
+            Console.WriteLine("   • 'quero reclamar de uma cobrança' (para RECLAMAR)");
             Console.WriteLine("   • 'listar reclamações'");
-            Console.WriteLine("   • 'mostrar [ID]' (ex: mostrar ABC123)");
+            Console.WriteLine("   • 'listar empresas'");
             continue;
         }
 
         Console.WriteLine($"⚡ Executando: {plugin}.{function}...");
         
-        var invokeResult = await kernel.InvokeAsync(plugin, function, routeArgs); // Mudei para invokeResult
+        // Caso especial para consulta de boletos (requer interação)
+        if (plugin == "BoletoLookup" && function == "SearchByCustomerName")
+        {
+            var boletoResult = await orchestrator.HandleBoletoConsultaAsync(input);
+            Console.WriteLine();
+            Console.WriteLine(boletoResult);
+            Console.WriteLine();
+            continue;
+        }
+
+        var invokeResult = await kernel.InvokeAsync(plugin, function, routeArgs);
         
         // Formatação da resposta
         var response = invokeResult?.ToString() ?? "Sem resposta";
