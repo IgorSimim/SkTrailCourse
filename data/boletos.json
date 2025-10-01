@@ -1,0 +1,117 @@
+{
+  "empresas": [
+    {
+      "id": "emp_001",
+      "nome_fantasia": "Zoop Tech Ltda",
+      "razao_social": "Zoop Tecnologia em Pagamentos Ltda",
+      "cnpj": "12.345.678/0001-90",
+      "contato_email": "financeiro@zoop.com.br",
+      "telefone": "(11) 4004-4004",
+      "endereco": "Av. Paulista, 1000 - São Paulo/SP",
+      "segmento": "Tecnologia/Pagamentos"
+    },{
+  "id": "emp_004",
+  "nome_fantasia": "COLÉGIO VIVER",
+  "razao_social": "COLÉGIO VIVER LTDA",
+  "cnpj": "13.040.273/0001-01",
+  "contato_email": "financeiro@colegioviver.com.br",
+  "telefone": "(11) 4000-4000",
+  "endereco": "Rua das Escolas, 100 - São Paulo/SP",
+  "segmento": "Educação"
+},
+    {
+      "id": "emp_002",
+      "nome_fantasia": "FitEasy Academy",
+      "razao_social": "FitEasy Academia e Esportes Ltda",
+      "cnpj": "98.765.432/0001-10",
+      "contato_email": "cobranca@fiteasy.com.br",
+      "telefone": "(11) 3003-3003",
+      "endereco": "Rua Augusta, 500 - São Paulo/SP",
+      "segmento": "Academia/Esportes"
+    },
+    {
+      "id": "emp_003",
+      "nome_fantasia": "Netflix Brasil",
+      "razao_social": "Netflix Servicos de Streaming Brasil Ltda",
+      "cnpj": "23.456.789/0001-34",
+      "contato_email": "suporte@netflix.com",
+      "telefone": "(11) 2002-2002",
+      "endereco": "Av. Brigadeiro Faria Lima, 2000 - São Paulo/SP",
+      "segmento": "Streaming/Entretenimento"
+    }
+  ],
+  "boletos": [
+    {
+      "boleto_id": "BLT_2024001",
+      "emissor_id": "emp_001",
+      "valor": 150.00,
+      "vencimento": "2024-12-10",
+      "pagavel_para": "Joao Silva Santos",
+      "documento_pagavel": "CPF: 123.456.789-00",
+      "status": "pendente",
+      "descricao": "Assinatura mensal Zoop Pro",
+      "codigo_barras": "00193373700000015000001234567890000000000100",
+      "linha_digitavel": "00190.00009 01234.567890 00000.000100 3 73700000015000"
+    },
+    {
+      "boleto_id": "BLT_2024521",
+      "emissor_id": "emp_023",
+      "valor": 120.00,
+      "vencimento": "2024-12-10",
+      "pagavel_para": "Joao Silva Santos",
+      "documento_pagavel": "CPF: 123.456.789-00",
+      "status": "pendente",
+      "descricao": "Assinatura mensal Zoop Pro",
+      "codigo_barras": "00193373700000015000001234567890000000000100",
+      "linha_digitavel": "00190.00009 01234.567890 00000.000100 3 73700000015000"
+    },
+    {
+  "boleto_id": "BLT_2024005",
+  "emissor_id": "emp_001",
+  "valor": 715.00,
+  "vencimento": "2024-10-15",
+  "pagavel_para": "Delusia Oliveira Santos",
+  "documento_pagavel": "CPF: 111.222.333-44",
+  "status": "pendente",
+  "descricao": "Mensalidade COLÉGIO VIVER",
+  "codigo_barras": "00193373700000715000001234567890000000000500",
+  "linha_digitavel": "00190.00009 01234.567890 00000.000500 3 73700000715000"
+    },
+    {
+      "boleto_id": "BLT_2024002",
+      "emissor_id": "emp_002",
+      "valor": 89.90,
+      "vencimento": "2024-12-15",
+      "pagavel_para": "Maria Oliveira Souza",
+      "documento_pagavel": "CPF: 987.654.321-00",
+      "status": "pago",
+      "descricao": "Mensalidade academia FitEasy",
+      "codigo_barras": "00193373700000089900001234567890000000000200",
+      "linha_digitavel": "00190.00009 01234.567890 00000.000200 3 73700000089900"
+    },
+    {
+      "boleto_id": "BLT_2024003",
+      "emissor_id": "emp_001",
+      "valor": 75.50,
+      "vencimento": "2024-12-05",
+      "pagavel_para": "Carlos Alberto Lima",
+      "documento_pagavel": "CPF: 456.789.123-00",
+      "status": "pendente",
+      "descricao": "Taxa de servico Zoop Basic",
+      "codigo_barras": "00193373700000075500001234567890000000000300",
+      "linha_digitavel": "00190.00009 01234.567890 00000.000300 3 73700000075500"
+    },
+    {
+      "boleto_id": "BLT_2024004",
+      "emissor_id": "emp_003",
+      "valor": 39.90,
+      "vencimento": "2024-12-08",
+      "pagavel_para": "Ana Paula Rodrigues",
+      "documento_pagavel": "CPF: 321.654.987-00",
+      "status": "pago",
+      "descricao": "Assinatura Netflix Premium",
+      "codigo_barras": "00193373700000039900001234567890000000000400",
+      "linha_digitavel": "00190.00009 01234.567890 00000.000400 3 73700000039900"
+    }
+  ]
+}
