@@ -1,56 +1,58 @@
-# 🤖 Zoop AI Analyst – Sistema Inteligente de Disputas
+# 🤖 Zoop AI Analyst – Sistema Inteligente de Análise de Cobranças
 
-Sistema avançado de análise automática de cobranças indevidas construído com **.NET 8 + Microsoft Semantic Kernel** e **Google Gemini**.
+Sistema avançado de análise automática de cobranças e disputas construído com **.NET 8 + Microsoft Semantic Kernel** e **Google Gemini**.
 
-O sistema processa reclamações de clientes em linguagem natural, rastreia transações em tempo real via API, e toma decisões automatizadas baseadas em políticas de negócio da Zoop.
+O sistema processa reclamações de clientes em linguagem natural, consulta boletos em tempo real, e toma decisões automatizadas baseadas em políticas de negócio da Zoop.
 
 ---
 
 ## 🚀 Funcionalidades Principais
 
 ### 🧠 Análise Inteligente com IA
-- **Processamento de linguagem natural** para entender reclamações
-- **Extração automática** de valores e datas das reclamações
-- **Roteamento inteligente** de comandos via AIIntentRouter
-- **Orquestração completa** do fluxo de análise
+- **Processamento de linguagem natural** para entender reclamações e consultas
+- **Roteamento inteligente** via AIIntentRouter que distingue entre consultas e reclamações
+- **Extração automática** de valores, datas e estabelecimentos das reclamações
+- **Orquestração completa** do fluxo de análise com DisputeOrchestrator
 
-### 🔍 Rastreamento de Transações
-- **Integração com ZoopApiMock** para consulta de transações
-- **Validação automática** de cobranças legítimas vs. fraudulentas
-- **Dados completos do merchant** (nome, contato, serviço)
+### 🔍 Consulta de Boletos
+- **Sistema completo de lookup** de boletos por nome do cliente
+- **Busca flexível** com remoção de acentos e correspondência parcial
+- **Base de dados JSON** com empresas e boletos cadastrados
+- **Identificação automática** quando Zoop é intermediária de pagamento
 
 ### ⚡ Decisões Automatizadas
 - **Reembolso automático** para valores ≤ R$50,00
-- **Escalação inteligente** para análise humana
-- **Tickets de prioridade máxima** para casos não rastreados
+- **Escalação inteligente** para análise humana em valores maiores
+- **Tickets de prioridade** baseados no valor e confiança da análise
+- **Políticas configuráveis** de reembolso por faixa de valor
 
-### 📊 Gerenciamento Completo
-- **CRUD completo** de disputas
+### 📊 Gerenciamento Completo de Disputas
+- **CRUD completo** de disputas (criar, listar, atualizar, excluir, mostrar)
 - **Persistência em JSON** (pasta `data/`)
 - **Interface CLI interativa** com comandos intuitivos
+- **Histórico completo** de ações e status
 
 ---
 
 ## 📂 Arquitetura do Sistema
 
 ```
-/ZoopSK
+/SkTrailCourse
  ├── Infra/
  │    ├── AIIntentRouter.cs      # Roteamento inteligente de comandos
  │    └── JsonMemoryStore.cs     # Persistência local em JSON
  ├── Plugins/
- │    ├── DisputePlugin.cs       # CRUD de disputas
- │    ├── DisputeOrchestrator.cs # Orquestração do fluxo de análise
- │    └── SupportPlugin.cs       # Integração com API de transações
- ├── Prompts/
- │    └── Analysis/
- │         └── skprompt.txt      # Prompt semântico para análise
- ├── data/                       # Armazenamento local de disputas
+ │    ├── DisputePlugin.cs       # CRUD completo de disputas
+ │    ├── DisputeOrchestrator.cs # Orquestração e políticas de negócio
+ │    ├── BoletoLookupPlugin.cs  # Consulta de boletos e empresas
+ │    └── SupportPlugin.cs       # Políticas e relatórios de suporte
+ ├── SkTrailCourse.Tests/        # Testes unitários
+ ├── data/
+ │    ├── disputes.json          # Armazenamento de disputas
+ │    └── boletos.json          # Base de boletos e empresas
  ├── Program.cs                  # Interface CLI interativa
  └── .env                        # Configurações da API Gemini
 ```
-
-
 
 ---
 
@@ -59,7 +61,6 @@ O sistema processa reclamações de clientes em linguagem natural, rastreia tran
 ### 1. Pré-requisitos
 - **.NET 8 SDK**
 - **Google AI Studio API Key** (Gemini)
-- **ZoopApiMock** rodando em localhost:5000
 
 ### 2. Configurar arquivo `.env`
 
@@ -70,123 +71,187 @@ GOOGLE_API_KEY=sua_chave_do_google_ai_studio
 AI_MODEL_ID=gemini-2.0-flash-exp
 ```
 
-### 3. Executar o ZoopApiMock
+### 3. Executar o sistema
 
 ```bash
-cd ../ZoopApiMock
+cd SkTrailCourse
+dotnet restore
 dotnet run
 ```
 
-### 4. Executar o ZoopSK
+### 4. Executar testes
 
 ```bash
-cd ZoopSK
-dotnet restore
-dotnet run
+cd SkTrailCourse.Tests
+dotnet test
 ```
 
 ---
 
 ## 💻 Exemplos de Uso
 
+### 🔍 Consulta de Boletos
+
+```
+💬 > verifiquei uma compra de 150 reais no meu boleto
+🔍 Analisando: 'verifiquei uma compra de 150 reais no meu boleto'
+🎯 Roteado para: BoletoLookup.SearchByCustomerName
+👤 Por favor, informe seu nome completo para consulta: João Silva Santos
+
+✅ Encontramos 2 boleto(s) para 'João Silva Santos':
+
+📄 Boleto BLT_2024001 - R$ 150,00 (vencimento 2024-12-10)
+   Emitido por: Zoop Tech Ltda
+   Contato: financeiro@zoop.com.br
+   Status: pendente
+   📝 Descrição: Assinatura mensal Zoop Pro
+```
+
 ### 🎯 Análise Automática de Reclamação
 
 ```
-💬 > Não reconheço a cobrança de 39,90 da FitEasy
-⚡ Iniciando análise de cobrança com IA...
+💬 > Não reconheço a cobrança de 39,90 da Netflix
+🔍 Analisando: 'Não reconheço a cobrança de 39,90 da Netflix'
+🎯 Roteado para: Disputes.AddDispute
+⚡ Executando: Disputes.AddDispute...
 
-🤖 Resposta do Zoop AI Analyst:
-----------------------------------------
-Olá! Analisei sua reclamação sobre a cobrança de R$ 39,90.
+✅ 📩 Reclamação registrada (id: abc12345).
+🤖 Decisão da IA: aprovar_reembolso_provisorio
+Resumo: ✅ Reembolso automático para Netflix - R$ 39,90
 
-✅ TRANSAÇÃO RASTREADA:
-• Merchant: Academia FitEasy
-• Serviço: Mensalidade - Plano Trimestral
-• Data: 20/09/2025
-• Contato: suporte@fiteasy.com.br
-
-💰 REEMBOLSO APROVADO:
-Como o valor é inferior a R$ 50,00, seu reembolso provisório foi aprovado automaticamente.
-
-Recomendo entrar em contato com a Academia FitEasy para cancelar a assinatura se necessário.
-----------------------------------------
+💡 Dica: Use 'listar reclamações' para ver todas as disputas.
 ```
 
-### 📋 Comandos Disponíveis
+### 📋 Comandos de Gerenciamento
 
 ```
 💬 > listar reclamações
-📋 abc123 | [Pendente] Não reconheço a cobrança de 39,90 da FitEasy → Reembolso aprovado (em 2025-01-15 10:30:00Z)
+📋 abc12345 | [Reembolso Aprovado] Não reconheço a cobrança de 39,90 da Netflix → ✅ Reembolso automático para Netflix - R$ 39,90 (em 2024-12-15 14:30:00Z)
 
-💬 > mostrar abc123
-✅ ID: abc123
-Status: Pendente
-Merchant: Academia FitEasy
+💬 > mostrar abc12345
+✅ ID: abc12345
+Status: Reembolso Aprovado
+Merchant: Netflix
 Valor (cents): 3990
-Criada em: 2025-01-15 10:30:00Z
-Ação: Reembolso aprovado
-Texto: Não reconheço a cobrança de 39,90 da FitEasy
+Criada em: 2024-12-15 14:30:00Z
+Ação: ✅ Reembolso automático para Netflix - R$ 39,90
+Texto: Não reconheço a cobrança de 39,90 da Netflix
 
-💬 > atualizar abc123 para resolvida
-✏️ Reclamação abc123 atualizada para 'resolvida'.
+💬 > atualizar abc12345 para Resolvida
+✅ ✏️ Reclamação abc12345 atualizada para 'Resolvida'.
 ```
 
 ---
 
 ## 🎯 Fluxo de Análise Inteligente
 
-### 1. **Processamento da Reclamação**
-- Extração automática de valor e data via IA
-- Chamada para `Support.RastrearTransacao`
-- Validação contra base de transações
+### 1. **Roteamento Inteligente (AIIntentRouter)**
+- Analisa a entrada do usuário com IA
+- Distingue entre **consultas** (BoletoLookup) e **reclamações** (Disputes)
+- Extrai parâmetros automaticamente
+- Fallback para reclamação em caso de dúvida
 
-### 2. **Decisões Automatizadas**
+### 2. **Processamento de Consultas (BoletoLookupPlugin)**
+- Busca flexível por nome do cliente
+- Remoção de acentos e correspondência parcial
+- Identificação de Zoop como intermediária
+- Dados completos da empresa emissora
 
-#### ✅ **Transação Rastreada**
-- **Valor ≤ R$50,00**: Reembolso automático aprovado
-- **Valor > R$50,00**: Ticket para análise em 24-72h
-- Fornece dados do merchant para contato direto
+### 3. **Processamento de Disputas (DisputeOrchestrator)**
+- Extração de informações via IA (merchant, valor, confiança)
+- Aplicação de políticas de negócio
+- Decisões automatizadas baseadas em valor e confiança
 
-#### ❌ **Transação NÃO Rastreada**
-- Possível fraude ou falha de conciliação
-- Ticket de **prioridade máxima** criado
-- Escalação para suporte humano (suporte@zoop.com.br)
-
-### 3. **Políticas de Reembolso**
-- **Até R$ 50,00**: Automático
-- **R$ 50,01 - R$ 200,00**: Análise em 24h
-- **Acima de R$ 200,00**: Análise em 72h
+### 4. **Políticas de Reembolso**
+- **Até R$ 50,00 + alta confiança**: Reembolso automático
+- **R$ 50,01 - R$ 200,00**: Análise manual em 24h
+- **Acima de R$ 200,00**: Análise manual em 72h
+- **Baixa confiança**: Sempre para análise manual
 
 ---
 
-## 🔗 Integração com ZoopApiMock
+## 🗂️ Base de Dados
 
-O sistema se integra com a **ZoopApiMock** para:
-- Consultar transações por valor e data
-- Obter dados completos dos merchants
-- Validar legitimidade das cobranças
+### Empresas Cadastradas
+- **Zoop Tech Ltda** - Plataforma de pagamentos
+- **FitEasy Academy** - Academia e esportes
+- **Netflix Brasil** - Streaming
+- **Colégio Viver** - Educação
 
-**Endpoint utilizado:** `http://localhost:5000/api/v1/transacao/detalhes`
+### Estrutura de Boletos
+```json
+{
+  "boleto_id": "BLT_2024001",
+  "emissor_id": "emp_001",
+  "valor": 150.00,
+  "vencimento": "2024-12-10",
+  "pagavel_para": "João Silva Santos",
+  "status": "pendente",
+  "descricao": "Assinatura mensal Zoop Pro"
+}
+```
 
 ---
 
 ## 🛠️ Tecnologias
 
 - **.NET 8** - Framework principal
-- **Microsoft Semantic Kernel** - Orquestração de IA
-- **Google Gemini** - Modelo de linguagem
-- **HttpClient** - Integração com APIs
-- **System.Text.Json** - Serialização
-- **DotNetEnv** - Gerenciamento de variáveis
+- **Microsoft Semantic Kernel 1.65.0** - Orquestração de IA
+- **Google Gemini 2.0 Flash** - Modelo de linguagem
+- **System.Text.Json** - Serialização e persistência
+- **DotNetEnv** - Gerenciamento de variáveis de ambiente
+- **xUnit** - Framework de testes
+
+---
+
+## 🧪 Testes
+
+O projeto inclui testes unitários abrangentes:
+
+- **JsonMemoryStore**: Persistência e carregamento de dados
+- **SupportPlugin**: Políticas e funcionalidades de suporte
+- **DisputePlugin**: Operações manuais de CRUD
+- **Políticas de Negócio**: Lógica de aprovação de reembolsos
+
+```bash
+# Executar todos os testes
+dotnet test
+
+# Executar com detalhes
+dotnet test --verbosity normal
+```
 
 ---
 
 ## 📈 Próximos Passos
 
-- 🌐 **Interface Web** com Blazor/React
-- 🔒 **Autenticação** e autorização
-- 📊 **Dashboard** de métricas e KPIs
-- 🗄️ **Banco de dados** real (PostgreSQL/SQL Server)
-- 🔔 **Notificações** em tempo real
-- 📱 **API REST** para integração externa
-- 🧪 **Testes automatizados** unitários e de integração
+### 🌐 Interface e Integração
+- **Interface Web** com Blazor Server
+- **API REST** para integração externa
+- **Webhooks** para notificações em tempo real
+
+### 🔒 Segurança e Autenticação
+- **Autenticação JWT** para usuários
+- **Autorização baseada em roles**
+- **Auditoria completa** de ações
+
+### 📊 Analytics e Monitoramento
+- **Dashboard** de métricas e KPIs
+- **Relatórios avançados** de disputas
+- **Alertas automáticos** para padrões suspeitos
+
+### 🗄️ Infraestrutura
+- **Banco de dados** real (PostgreSQL/SQL Server)
+- **Cache distribuído** (Redis)
+- **Containerização** com Docker
+- **CI/CD** com GitHub Actions
+
+### 🤖 IA Avançada
+- **Análise de sentimento** nas reclamações
+- **Detecção de fraude** com ML
+- **Classificação automática** de tipos de disputa
+- **Sugestões proativas** de resolução
+
+---
+
+*Desenvolvido usando .NET 8 e Microsoft Semantic Kernel*
