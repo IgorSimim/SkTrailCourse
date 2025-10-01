@@ -68,7 +68,7 @@ Crie o arquivo `.env` na raiz do projeto:
 
 ```env
 GOOGLE_API_KEY=sua_chave_do_google_ai_studio
-AI_MODEL_ID=gemini-2.0-flash
+AI_MODEL_ID=gemini-2.5-flash
 ```
 
 ### 3. Executar o sistema
