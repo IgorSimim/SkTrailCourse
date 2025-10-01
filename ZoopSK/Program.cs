@@ -25,7 +25,6 @@ try
         apiKey: apiKey,
         apiVersion: GoogleAIVersion.V1);
 
-    // adicionar um espaço antes do prompt para melhor formatação
     Console.WriteLine("✅ Modelo Gemini conectado com sucesso!");
 }
 catch (Exception ex)
@@ -38,7 +37,7 @@ catch (Exception ex)
 var kernel = kernelBuilder.Build();
 var store = new JsonMemoryStore("data");
 
-// Configurar o HttpClient para a Injeção de Dependência
+// Configurar o HttpClient para a injeção de dependência
 var serviceProvider = new ServiceCollection()
     .AddHttpClient() 
     .BuildServiceProvider();
@@ -114,7 +113,7 @@ while (true)
         {
             Console.WriteLine("⚡ Iniciando análise de cobrança com IA...");
 
-            // Chama o método do Orquestrador
+            // Chama o método do orquestrador
             var finalResponse = await orchestrator.AnalyzeAndResolveDispute(input);
 
             Console.WriteLine();

@@ -15,16 +15,14 @@ public class DisputeOrchestrator
         _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         
-        // 1. Corrigindo o Carregamento da Função Semântica
+        // 1. Carregamento da função semântica
         try
         {
             // O nome do plugin que você quer criar: "AnalysisPlugin"
             const string PluginName = "AnalysisPlugin"; 
             
-            // **CORREÇÃO AQUI:** Use ImportPluginFromPromptDirectory diretamente no Kernel.
-            // Isso retorna o IKernelPlugin que foi criado.
             var promptPlugin = _kernel.ImportPluginFromPromptDirectory(
-                pluginDirectory: "Prompts", // O diretório raiz que contém a pasta 'Analysis'
+                pluginDirectory: "Prompts",
                 pluginName: PluginName
             );
             

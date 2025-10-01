@@ -34,7 +34,7 @@ public class SupportPlugin
             // 2. Chama a API
             HttpResponseMessage resposta = await _httpClient.GetAsync(url);
 
-            // 3. Verifica o Status Code
+            // 3. Verifica o status code
             if (resposta.IsSuccessStatusCode)
             {
                 return await resposta.Content.ReadAsStringAsync();
