@@ -1,6 +1,5 @@
 ﻿using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.Google;
-using Microsoft.Extensions.DependencyInjection;
 using SkTrailCourse.Infra;
 using SkTrailCourse.Plugins;
 using System.Text;
@@ -26,6 +25,7 @@ try
         apiVersion: GoogleAIVersion.V1);
 
     Console.WriteLine("✅ Modelo Gemini conectado com sucesso!");
+    Console.WriteLine($"🤖 Modelo: {modelId}");
 }
 catch (Exception ex)
 {
@@ -37,21 +37,11 @@ catch (Exception ex)
 var kernel = kernelBuilder.Build();
 var store = new JsonMemoryStore("data");
 
-// Configurar o HttpClient para a injeção de dependência
-var serviceProvider = new ServiceCollection()
-    .AddHttpClient() 
-    .BuildServiceProvider();
-
-var httpClient = serviceProvider.GetRequiredService<HttpClient>();
-
-
 // === Plugins (usando suas classes originais) ===
 var orchestrator = new DisputeOrchestrator(kernel, store);
 var disputes = new DisputePlugin(store, kernel, orchestrator);
-var support = new SupportPlugin(httpClient);
 
 kernel.ImportPluginFromObject(disputes, "Disputes");
-kernel.ImportPluginFromObject(support, "Support");
 
 // Router (usando sua classe AIIntentRouter original)
 var router = new AIIntentRouter(kernel);
@@ -108,32 +98,27 @@ while (true)
         var function = routeResult.function;
         var routeArgs = routeResult.args;
 
-        // Se o roteamento não encontrou um comando direto (como 'listar'), assumimos que é uma reclamação
-        if (plugin is null || function is null || function == "AddDispute") 
+        if (plugin is null || function is null)
         {
-            Console.WriteLine("⚡ Iniciando análise de cobrança com IA...");
-
-            // Chama o método do orquestrador
-            var finalResponse = await orchestrator.AnalyzeAndResolveDispute(input);
-
-            Console.WriteLine();
-            Console.WriteLine("🤖 Resposta do Zoop AI Analyst:");
-            Console.WriteLine("----------------------------------------");
-            Console.WriteLine(finalResponse);
-            Console.WriteLine("----------------------------------------");
-            
+            // Fallback: se não entendeu, mostra ajuda
+            Console.WriteLine("🤔 Não entendi. Tente:");
+            Console.WriteLine("   • 'Não reconheço cobrança de 39,90 da FitEasy'");
+            Console.WriteLine("   • 'listar reclamações'");
+            Console.WriteLine("   • 'mostrar [ID]' (ex: mostrar ABC123)");
             continue;
         }
 
         Console.WriteLine($"⚡ Executando: {plugin}.{function}...");
         
-        var invokeResult = await kernel.InvokeAsync(plugin, function, routeArgs); 
+        var invokeResult = await kernel.InvokeAsync(plugin, function, routeArgs); // Mudei para invokeResult
         
+        // Formatação da resposta
         var response = invokeResult?.ToString() ?? "Sem resposta";
         Console.WriteLine();
         Console.WriteLine("✅ " + response);
         Console.WriteLine();
         
+        // Dica após adicionar disputa
         if (function == "AddDispute")
         {
             Console.WriteLine("💡 Dica: Use 'listar reclamações' para ver todas as disputas.");

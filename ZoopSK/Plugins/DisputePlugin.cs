@@ -27,6 +27,31 @@ public class DisputePlugin
         string ActionTaken,
         DateTime CreatedAt);
 
+    [KernelFunction, Description("Registrar uma reclamação de cobrança indevida")]
+    public async Task<string> AddDispute([Description("Texto da reclamação do cliente")] string complaint)
+    {
+        var list = await _store.LoadListAsync<DisputeItem>(Key);
+
+        var orchestratorResult = await _orchestrator.HandleAsync(complaint);
+
+        var id = Guid.NewGuid().ToString("N").Substring(0, 8);
+        var record = new DisputeItem(
+            Id: id,
+            CustomerText: complaint,
+            Merchant: orchestratorResult.Merchant ?? "desconhecido",
+            AmountCents: orchestratorResult.AmountCents,
+            Status: orchestratorResult.Status,
+            ActionTaken: orchestratorResult.ActionSummary,
+            CreatedAt: DateTime.UtcNow);
+
+        list.Add(record);
+        await _store.SaveListAsync(Key, list);
+
+        return $@"📩 Reclamação registrada (id: {id}).
+🤖 Decisão da IA: {orchestratorResult.Action}
+Resumo: {orchestratorResult.ActionSummary}";
+    }
+
     [KernelFunction, Description("Lista as reclamações registradas")]
     public async Task<string> ListDisputes()
     {
