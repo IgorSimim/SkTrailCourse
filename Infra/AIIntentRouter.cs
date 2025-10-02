@@ -1,5 +1,6 @@
 using Microsoft.SemanticKernel;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SkTrailCourse.Infra;
 
@@ -19,53 +20,68 @@ public class AIIntentRouter
 
         var args = new KernelArguments();
 
-        // PRIMEIRO: Verificação direta para consultas de boleto (antes da IA)
-        if (ContainsBoletoKeywords(input))
-        {
-            return ("BoletoLookup", "SearchByCustomerName", new KernelArguments());
-        }
-
         try
         {
             var prompt = @$"
-Analise a entrada do usuário e determine qual função deve ser chamada:
+ANALISE a intenção real do usuário e determine a função correta:
 
-Entrada do usuário: {input}
+ENTRADA DO USUÁRIO: ""{input}""
 
-Opções disponíveis:
-- Plugin 'Disputes':
-  • AddDispute(complaint) - Para RECLAMAÇÕES sobre cobranças indevidas, fraudes, problemas com compras
-  • ListDisputes() - Listar todas as disputas  
-  • UpdateDisputeStatus(id, newStatus) - Atualizar status
-  • DeleteDispute(id) - Excluir disputa
-  • ShowDispute(id) - Mostrar detalhes
+FUNÇÕES DISPONÍVEIS:
 
-- Plugin 'BoletoLookup':
-  • SearchByCustomerName(nomeCliente) - Para CONSULTAS de boletos, verificar origem de cobranças, identificar empresas
+1. Disputes.AddDispute - PARA: Nova reclamação, fraude, cobrança indevida, problema não relatado antes
+2. Disputes.EditDispute - PARA: Corrigir, atualizar, modificar uma reclamação JÁ EXISTENTE (quando menciona ID ou se refere a uma reclamação anterior)
+3. Disputes.ListDisputes - PARA: Listar, ver, mostrar todas as reclamações
+4. Disputes.DeleteDispute - PARA: Excluir, remover, apagar uma reclamação específica
+5. Disputes.ShowDispute - PARA: Detalhes, informações específicas de uma reclamação
+6. BoletoLookup.SearchByCustomerName - PARA: Consultar, verificar, identificar origem de boletos/cobranças
 
-REGRAS DE DECISÃO:
-- Use 'BoletoLookup' quando o usuário quer SABER a origem de uma cobrança, verificar um boleto, identificar qual empresa emitiu
-- Use 'Disputes' quando o usuário quer RECLAMAR sobre uma cobrança indevida
+ANÁLISE DE INTENÇÃO - PERGUNTAS CRÍTICAS:
 
-Exemplos:
-- 'verifiquei uma compra de 150 reais no boleto' → BoletoLookup
-- 'não reconheço essa cobrança no meu extrato' → BoletoLookup  
-- 'quem emitiu esse boleto?' → BoletoLookup
-- 'quero reclamar de uma cobrança indevida' → Disputes
-- 'fraude na minha fatura' → Disputes
+- O usuário está se referindo a uma reclamação EXISTENTE (menciona ID como 9b344c60 ou fala ""aquela reclamação"")? → EditDispute/ShowDispute/DeleteDispute
+- O usuário quer CRIAR uma NOVA reclamação? → AddDispute  
+- O usuário quer apenas CONSULTAR/VER informações? → ListDisputes ou SearchByCustomerName
+- O usuário menciona ""boleto"", ""cobrança"", ""verifiquei"" sem reclamar? → SearchByCustomerName
 
-Responda SOMENTE com JSON:
+EXEMPLOS DE INTENÇÃO:
+
+- ""quero reclamar de uma cobrança da Netflix"" → NOVA reclamação → AddDispute
+- ""na vdd a reclamação 9b344c60 é de 500 reais"" → CORREÇÃO de existente → EditDispute (id: ""9b344c60"", correctionText: ""é de 500 reais"")
+- ""aquela reclamação que fiz, o valor é 300"" → CORREÇÃO de existente → EditDispute  
+- ""lista minhas reclamações"" → LISTAR → ListDisputes
+- ""verifiquei uma compra no boleto"" → CONSULTAR → SearchByCustomerName
+- ""excluir a 9b344c60"" → EXCLUIR → DeleteDispute (id: ""9b344c60"")
+- ""detalhes da abc123"" → DETALHES → ShowDispute (id: ""abc123"")
+
+EXTRAÇÃO DE PARÂMETROS:
+- Para EditDispute: extraia 'id' (padrão: 8 caracteres alfanuméricos) e 'correctionText' (o texto da correção)
+- Para DeleteDispute/ShowDispute: extraia apenas 'id'
+- Para AddDispute: use o texto completo como 'complaint'
+
+RESPONDA SOMENTE COM JSON:
 
 {{
-  ""plugin"": ""NomeDoPlugin"",
-  ""function"": ""NomeDaFuncao"",
-  ""parameters"": {{ ""param1"": ""valor1"", ""param2"": ""valor2"" }}
+  ""plugin"": ""Disputes"",
+  ""function"": ""AddDispute"",
+  ""parameters"": {{ 
+    ""id"": ""valor_ou_null"", 
+    ""complaint"": ""valor_ou_null"",
+    ""correctionText"": ""valor_ou_null""
+  }}
 }}
 
-Use exatamente estes nomes de plugin: 'Disputes' ou 'BoletoLookup'";
+OU
+
+{{
+  ""plugin"": ""BoletoLookup"", 
+  ""function"": ""SearchByCustomerName"",
+  ""parameters"": {{}}
+}}";
 
             var result = await _kernel.InvokePromptAsync(prompt);
             var response = result.ToString().Trim();
+
+            Console.WriteLine($"🤖 Resposta da IA: {response}");
 
             // Limpa markdown se houver
             response = response
@@ -94,49 +110,92 @@ Use exatamente estes nomes de plugin: 'Disputes' ou 'BoletoLookup'";
 
                     if (routeInfo != null && !string.IsNullOrEmpty(routeInfo.Plugin) && !string.IsNullOrEmpty(routeInfo.Function))
                     {
-                        // Remove "Plugin " do nome se existir
                         var cleanPlugin = routeInfo.Plugin.Replace("Plugin ", "").Replace("plugin ", "").Trim();
 
-                        // Processa parâmetros
+                        // Processa parâmetros de forma inteligente
                         if (routeInfo.Parameters != null)
                         {
                             foreach (var param in routeInfo.Parameters)
                             {
-                                args[param.Key] = param.Value?.ToString();
+                                var paramValue = param.Value?.ToString();
+                                if (!string.IsNullOrEmpty(paramValue) && !paramValue.Equals("null", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    args[param.Key] = paramValue;
+                                    Console.WriteLine($"🔧 Parâmetro extraído: {param.Key} = {paramValue}");
+                                }
                             }
                         }
 
-                        // Garante que AddDispute sempre tenha o complaint
+                        // GARANTE parâmetros obrigatórios baseados na função
                         if (routeInfo.Function.Equals("AddDispute", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("complaint"))
                         {
                             args["complaint"] = input;
                         }
 
+                        if (routeInfo.Function.Equals("EditDispute", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (!args.ContainsKey("id"))
+                            {
+                                // Tenta extrair ID como fallback
+                                var extractedId = ExtractIdFromInput(input);
+                                if (extractedId != null)
+                                {
+                                    args["id"] = extractedId;
+                                    args["correctionText"] = input;
+                                    Console.WriteLine($"🔧 ID extraído como fallback: {extractedId}");
+                                }
+                            }
+                            if (!args.ContainsKey("correctionText"))
+                            {
+                                args["correctionText"] = input;
+                            }
+                        }
+
+                        if ((routeInfo.Function.Equals("DeleteDispute", StringComparison.OrdinalIgnoreCase) || 
+                             routeInfo.Function.Equals("ShowDispute", StringComparison.OrdinalIgnoreCase)) &&
+                            !args.ContainsKey("id"))
+                        {
+                            var extractedId = ExtractIdFromInput(input);
+                            if (extractedId != null)
+                            {
+                                args["id"] = extractedId;
+                            }
+                        }
+
+                        Console.WriteLine($"🎯 Roteamento final: {cleanPlugin}.{routeInfo.Function}");
                         return (cleanPlugin, routeInfo.Function, args);
                     }
                 }
                 catch (JsonException jex)
                 {
-                    Console.WriteLine($"Erro ao analisar JSON: {jex.Message}");
+                    Console.WriteLine($"❌ Erro ao analisar JSON: {jex.Message}");
+                    Console.WriteLine($"📄 JSON problemático: {jsonRaw}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Erro no roteador: {ex.Message}");
+            Console.WriteLine($"❌ Erro no roteador: {ex.Message}");
         }
 
-        // Fallback padrão para novas reclamações
-        args["complaint"] = input;
-        return ("Disputes", "AddDispute", args);
+        // FALLBACK MÍNIMO: Se tudo falhar, pergunta se é consulta ou reclamação
+        Console.WriteLine($"🔄 Fallback mínimo - assumindo consulta de boleto");
+        return ("BoletoLookup", "SearchByCustomerName", args);
     }
 
-    private bool ContainsBoletoKeywords(string input)
+    private string? ExtractIdFromInput(string input)
     {
-        var boletoKeywords = new[] { "boleto", "boletos", "cobrança", "cobrancas", "compra no", "pagamento", "fatura", "verifiquei", "encontrei", "vi uma", "identifiquei", "qual empresa", "quem emitiu", "origem da", "desse valor", "desta cobrança" };
-        var lowerInput = input.ToLower();
-
-        return boletoKeywords.Any(keyword => lowerInput.Contains(keyword));
+        try
+        {
+            var idPattern = @"\b[a-f0-9]{8}\b|\b[A-Za-z0-9]{6,8}\b";
+            var match = Regex.Match(input, idPattern);
+            return match.Success ? match.Value : null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro ao extrair ID: {ex.Message}");
+            return null;
+        }
     }
 
     private class RouteInfo

@@ -22,10 +22,22 @@ public class DisputeOrchestrator
         int? AmountCents,
         string Status);
 
-    public async Task<OrchestratorResult> HandleAsync(string customerText)
+    public async Task<OrchestratorResult> HandleAsync(string customerText, bool isEdit = false)
     {
         // Extrai informações usando IA de forma robusta
         var analysis = await ExtractInformationWithAI(customerText);
+        
+        // SE for uma edição, força ser tratada como disputa para manter o contexto original
+        if (isEdit)
+        {
+            return ApplyPolicy(
+                customerText, 
+                analysis.Merchant, 
+                analysis.AmountCents, 
+                true,  // Força ser disputa em edições
+                analysis.Confidence
+            );
+        }
         
         return ApplyPolicy(
             customerText, 
@@ -71,7 +83,7 @@ RECLAMAÇÃO: ""{customerText}""
 REGRAS:
 1. Para merchant: extraia o nome do negócio, loja ou serviço
 2. Para amount_cents: converta valores como ""R$ 35,90"" → 3590
-3. Para isDispute: true para reclamações de cobrança indevida
+3. Para isDispute: SEMPRE considere true para qualquer reclamação de cobrança, fraude ou problema financeiro
 4. Para confidence: estime a confiança da extração (0.0-1.0)
 
 RESPOSTA EM JSON (use double quotes):
@@ -85,7 +97,8 @@ RESPOSTA EM JSON (use double quotes):
 Exemplos:
 - ""Não reconheço R$ 35,90 da Netflix"" → {{""merchant"": ""Netflix"", ""amount_cents"": 3590, ""isDispute"": true, ""confidence"": 0.95}}
 - ""Cobrança de 150 reais na loja"" → {{""merchant"": ""loja"", ""amount_cents"": 15000, ""isDispute"": true, ""confidence"": 0.8}}
-- ""Problema com assinatura"" → {{""merchant"": null, ""amount_cents"": null, ""isDispute"": true, ""confidence"": 0.6}}";
+- ""Problema com assinatura"" → {{""merchant"": null, ""amount_cents"": null, ""isDispute"": true, ""confidence"": 0.6}}
+- ""eu estava errado e são na vdd 500 reais"" → {{""merchant"": null, ""amount_cents"": 50000, ""isDispute"": true, ""confidence"": 0.7}}";
 
         try
         {
@@ -112,7 +125,7 @@ Exemplos:
         {
             Console.WriteLine($"⚠️ Erro na extração com IA: {ex.Message}");
             
-            // Fallback conservativo
+            // Fallback conservativo - SEMPRE considera como disputa
             return (null, null, true, 0.3);
         }
     }
@@ -128,14 +141,16 @@ Exemplos:
 
     private OrchestratorResult ApplyPolicy(string originalText, string? merchant, int? amountCents, bool isDispute, double confidence)
     {
+        // NUNCA mais ignora reclamações - sempre trata como disputa válida
         if (!isDispute)
         {
+            // Mesmo se a IA disser que não é disputa, trata como pendente
             return new OrchestratorResult(
-                "ignorar", 
-                "Não é cobrança indevida.", 
+                "abrir_ticket", 
+                $"📋 Análise manual - {merchant ?? "Estabelecimento não identificado"}", 
                 merchant, 
                 amountCents, 
-                "Ignorada"
+                "Pendente"
             );
         }
 
