@@ -51,19 +51,19 @@ public class DisputeOrchestrator
     // NOVO MÉTODO: Consulta de boletos com interação
     public async Task<string> HandleBoletoConsultaAsync(string initialInput)
     {
-        Console.Write("👤 Por favor, informe seu nome completo para consulta: ");
-        var nomeCliente = Console.ReadLine()?.Trim();
+        Console.Write("👤 Por favor, informe seu CPF para consulta: ");
+        var cpf = Console.ReadLine()?.Trim();
 
-        if (string.IsNullOrWhiteSpace(nomeCliente))
+        if (string.IsNullOrWhiteSpace(cpf))
         {
-            return "❌ Nome não informado. Operação cancelada.";
+            return "❌ CPF não informado. Operação cancelada.";
         }
 
-        Console.WriteLine($"🔍 Consultando boletos para: {nomeCliente}...");
+        Console.WriteLine($"🔍 Consultando boletos para o CPF: {cpf}...");
 
-        // Chama o plugin de consulta de boletos
-        var result = await _kernel.InvokeAsync("BoletoLookup", "SearchByCustomerName", 
-            new KernelArguments { ["nomeCliente"] = nomeCliente });
+        // Chama o plugin de consulta de boletos por CPF
+        var result = await _kernel.InvokeAsync("BoletoLookup", "SearchByCpf",
+            new KernelArguments { ["cpf"] = cpf });
 
         return result.ToString();
     }

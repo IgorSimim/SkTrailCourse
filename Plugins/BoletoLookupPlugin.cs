@@ -219,4 +219,88 @@ public class BoletoLookupPlugin
             return $"❌ Erro ao listar empresas: {ex.Message}";
         }
     }
+
+    [KernelFunction, Description("Buscar boletos por CPF do cliente")]
+    public async Task<string> SearchByCpf(
+        [Description("CPF do cliente para buscar boletos")] string cpf)
+    {
+        try
+        {
+            if (!File.Exists(_dataFile))
+            {
+                return $"❌ Arquivo de dados não encontrado.";
+            }
+
+            var json = await File.ReadAllTextAsync(_dataFile);
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            };
+
+            var data = JsonSerializer.Deserialize<BoletoData>(json, options);
+
+            if (data == null)
+            {
+                return "❌ Erro: Não foi possível ler os dados do arquivo.";
+            }
+
+            if (data.Boletos == null || data.Empresas == null)
+            {
+                return "❌ Estrutura de dados inválida no arquivo.";
+            }
+
+            // Normaliza CPF removendo caracteres não numéricos
+            string NormalizeDigits(string s) => new string((s ?? string.Empty).Where(char.IsDigit).ToArray());
+            var cpfClean = NormalizeDigits(cpf);
+
+            var boletosCliente = data.Boletos
+                .Where(b => !string.IsNullOrEmpty(b.DocumentoPagavel) &&
+                            NormalizeDigits(b.DocumentoPagavel).Contains(cpfClean))
+                .ToList();
+
+            if (!boletosCliente.Any())
+                return $"❌ Nenhum boleto encontrado para o CPF '{cpf}'.";
+
+            var resultados = new List<string>();
+            foreach (var boleto in boletosCliente)
+            {
+                var empresa = data.Empresas.FirstOrDefault(e => e.Id == boleto.EmissorId);
+                var nomeEmpresa = empresa?.NomeFantasia ?? "Empresa não encontrada";
+                var contato = empresa?.ContatoEmail ?? "Contato não disponível";
+
+                var descricaoFormatada = !string.IsNullOrEmpty(boleto.Descricao)
+                    ? $"\n   📝 Descrição: {boleto.Descricao}"
+                    : "";
+
+                // Detecta se a Zoop é intermediária
+                var isIntermediaria = nomeEmpresa.Contains("Zoop") &&
+                                    !string.IsNullOrEmpty(boleto.Descricao) &&
+                                    boleto.Descricao.Length > 10;
+
+                var avisoIntermediaria = isIntermediaria
+                    ? $"\n   💡 A Zoop é a plataforma de pagamentos. O estabelecimento real é mencionado na descrição acima."
+                    : "";
+
+                resultados.Add(
+                    $"📄 Boleto {boleto.BoletoId} - R$ {boleto.Valor:F2} (vencimento {boleto.Vencimento})\n" +
+                    $"   Emitido por: {nomeEmpresa}\n" +
+                    $"   Contato: {contato}\n" +
+                    $"   Status: {boleto.Status}{descricaoFormatada}{avisoIntermediaria}"
+                );
+            }
+
+            return $"✅ Encontramos {boletosCliente.Count} boleto(s) para o CPF '{cpf}':\n\n" +
+                   string.Join("\n\n", resultados);
+        }
+        catch (JsonException jex)
+        {
+            return $"❌ Erro no formato do arquivo de dados: {jex.Message}";
+        }
+        catch (Exception ex)
+        {
+            return $"❌ Erro ao consultar boletos: {ex.Message}";
+        }
+    }
 }

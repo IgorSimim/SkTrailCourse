@@ -31,29 +31,61 @@ public class HomeController : Controller
         _store = store; // ← INJETAR O STORE
     }
 
+    // Heurística simples para decidir se a entrada do usuário é provavelmente uma reclamação
+    private bool IsLikelyComplaint(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return false;
+
+        var lowered = input.ToLowerInvariant();
+
+        // Palavras-chave que indicam reclamação/fraude/cobrança
+        var complaintKeywords = new[]
+        {
+            "reclam", "cobran", "fraud", "fraude", "não reconhec", "nao reconhec", "estorno", "charg", "cobrado", "cobrança", "cobranca",
+            "não paguei", "nao paguei", "cobrança indevida", "cobranca indevida", "erro na cobrança", "contest",
+            "não reconheço", "nao reconheco", "cobrança não", "cobranca nao"
+        };
+
+        foreach (var kw in complaintKeywords)
+        {
+            if (lowered.Contains(kw)) return true;
+        }
+
+        // Padrão monetário: R$ 123,45 ou apenas números seguidos de 'reais' ou 'rs'
+        if (System.Text.RegularExpressions.Regex.IsMatch(lowered, @"r\$\s*\d+|\d+\s*reais|\d+,\d{2}\s*reais|rs\s*\d+"))
+            return true;
+
+        // Se a entrada for muito curta ou apenas um agradecimento/resposta curta, não é reclamação
+        var shortResponses = new[] { "ok", "obrigado", "brigado", "valeu", "thanks", "thanks!", "ok!", "entendi" };
+        if (shortResponses.Any(s => lowered.Equals(s))) return false;
+
+        // Caso contrário, conservador: não assume reclamação
+        return false;
+    }
+
     public IActionResult Index()
     {
         // Mensagem de boas-vindas igual ao terminal
         var welcomeMessage = new StringBuilder();
     welcomeMessage.AppendLine("=== 🤖 ZoopIA (MVP) ===");
         welcomeMessage.AppendLine("Sistema de análise automática de cobranças indevidas");
-        welcomeMessage.AppendLine();
-        welcomeMessage.AppendLine("📝 COMO USAR:");
-        welcomeMessage.AppendLine("• CONSULTAR origem de cobrança:");
-        welcomeMessage.AppendLine("  Ex: 'verifiquei uma compra de 150 reais da zoop no meu boleto'");
-        welcomeMessage.AppendLine("  Ex: 'não reconheço essa cobrança no meu extrato'");
-        welcomeMessage.AppendLine("• RECLAMAR de cobrança indevida:");
-        welcomeMessage.AppendLine("  Ex: 'quero reclamar de uma cobrança indevida da Netflix'");
-        welcomeMessage.AppendLine("  Ex: 'fraude na minha fatura'");
-        welcomeMessage.AppendLine();
-        welcomeMessage.AppendLine("🔧 COMANDOS DISPONÍVEIS:");
-        welcomeMessage.AppendLine("• 'listar reclamações' - Ver todas as disputas");
-        welcomeMessage.AppendLine("• 'listar empresas' - Ver empresas cadastradas");
-        welcomeMessage.AppendLine("• 'mostrar ABC123' - Detalhes de uma disputa");
-        welcomeMessage.AppendLine("• 'atualizar ABC123 para resolvida' - Atualizar status");
-        welcomeMessage.AppendLine("• 'excluir ABC123' - Remover uma disputa");
-        welcomeMessage.AppendLine("• 'sair' - Encerrar o sistema");
-        welcomeMessage.AppendLine();
+        // welcomeMessage.AppendLine();
+        // welcomeMessage.AppendLine("📝 COMO USAR:");
+        // welcomeMessage.AppendLine("• CONSULTAR origem de cobrança:");
+        // welcomeMessage.AppendLine("  Ex: 'verifiquei uma compra de 150 reais da zoop no meu boleto'");
+        // welcomeMessage.AppendLine("  Ex: 'não reconheço essa cobrança no meu extrato'");
+        // welcomeMessage.AppendLine("• RECLAMAR de cobrança indevida:");
+        // welcomeMessage.AppendLine("  Ex: 'quero reclamar de uma cobrança indevida da Netflix'");
+        // welcomeMessage.AppendLine("  Ex: 'fraude na minha fatura'");
+        // welcomeMessage.AppendLine();
+        // welcomeMessage.AppendLine("🔧 COMANDOS DISPONÍVEIS:");
+        // welcomeMessage.AppendLine("• 'listar reclamações' - Ver todas as disputas");
+        // welcomeMessage.AppendLine("• 'listar empresas' - Ver empresas cadastradas");
+        // welcomeMessage.AppendLine("• 'mostrar ABC123' - Detalhes de uma disputa");
+        // welcomeMessage.AppendLine("• 'atualizar ABC123 para resolvida' - Atualizar status");
+        // welcomeMessage.AppendLine("• 'excluir ABC123' - Remover uma disputa");
+        // welcomeMessage.AppendLine("• 'sair' - Encerrar o sistema");
+        // welcomeMessage.AppendLine();
         welcomeMessage.AppendLine("----------------------------------------");
 
         ViewBag.WelcomeMessage = welcomeMessage.ToString();
@@ -102,34 +134,41 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
             return Json(response);
         }
 
-        // Processamento com IA
-        response.Message += $"🔍 Analisando: '{command}'\n";
-        
+        // Processamento com IA (apenas logs server-side; respostas ao usuário são limpas)
         var routeResult = await _router.RouteAsync(command);
         var plugin = routeResult.plugin;
         var function = routeResult.function;
         var routeArgs = routeResult.args;
 
         Console.WriteLine($"🎯 Roteamento definido: {plugin}.{function}");
-        response.Message += $"🎯 Roteado para: {plugin}.{function}\n";
 
         if (plugin is null || function is null)
         {
-            response.Message += "🤔 Não entendi. Tente:\n";
-            response.Message += "   • 'verifiquei uma compra no boleto' (para CONSULTAR origem)\n";
-            response.Message += "   • 'quero reclamar de uma cobrança' (para RECLAMAR)\n";
-            response.Message += "   • 'listar reclamações'\n";
-            response.Message += "   • 'listar empresas'\n";
+            response.Message = "🤔 Não entendi. Tente:\n" +
+                               "   • 'verifiquei uma compra no boleto' (para CONSULTAR origem)\n" +
+                               "   • 'quero reclamar de uma cobrança' (para RECLAMAR)\n" +
+                               "   • 'listar reclamações'\n" +
+                               "   • 'listar empresas'";
             return Json(response);
         }
 
-        response.Message += $"⚡ Executando: {plugin}.{function}...\n";
-        
+        // Evita criação automática de disputa quando a entrada não parece ser uma reclamação clara
+        if (string.Equals(plugin, "Disputes", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(function, "AddDispute", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!IsLikelyComplaint(command))
+            {
+                response.Message += "🤔 Não consegui identificar claramente uma reclamação de cobrança. Pode descrever o problema com mais detalhes (ex: 'quero reclamar de uma cobrança não reconhecida de R$ 150,00')?";
+                return Json(response);
+            }
+        }
+
         // Caso especial para consulta de boletos (requer interação)
         if (plugin == "BoletoLookup" && function == "SearchByCustomerName")
         {
-            response.RequiresNameInput = true;
-            response.Message += "👤 Por favor, informe seu nome completo para consulta:";
+            // Para consultas de boleto, pedimos CPF em vez do nome
+            response.RequiresCpfInput = true;
+            response.Message += "👤 Por favor, informe seu CPF (somente números ou formato padrão) para consulta:";
             return Json(response);
         }
 
@@ -137,14 +176,14 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
         Console.WriteLine($"⚡ Invocando: {plugin}.{function}");
         var invokeResult = await _kernel.InvokeAsync(plugin, function, routeArgs);
         
-        // Formatação da resposta
+        // Formatação da resposta (apenas conteúdo útil ao usuário)
         var resultText = invokeResult?.ToString() ?? "Sem resposta";
-        response.Message += $"\n✅ {resultText}\n";
-        
+        response.Message = resultText;
+
         // Dica após adicionar disputa
         if (function == "AddDispute")
         {
-            response.Message += "\n💡 Dica: Use 'listar reclamações' para ver todas as disputas.\n";
+            response.Message += "\n\n💡 Dica: Use 'listar reclamações' para ver todas as disputas.";
         }
 
         Console.WriteLine($"📤 Resposta enviada para o cliente");
@@ -161,21 +200,21 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
     }
 }
     [HttpPost]
-    public async Task<JsonResult> SearchBoletos([FromBody] NameInput input)
+    public async Task<JsonResult> SearchBoletos([FromBody] CpfInput input)
     {
         try
         {
             var response = new ChatResponse();
             
-            if (string.IsNullOrWhiteSpace(input.CustomerName))
+            if (string.IsNullOrWhiteSpace(input.CustomerCpf))
             {
-                response.Message = "❌ Nome não informado.";
+                response.Message = "❌ CPF não informado.";
                 return Json(response);
             }
 
-            response.Message += $"🔍 Consultando boletos para: {input.CustomerName}...\n";
+            response.Message += $"🔍 Consultando boletos para o CPF: {input.CustomerCpf}...\n";
             
-            var result = await _boletoLookup.SearchByCustomerName(input.CustomerName);
+            var result = await _boletoLookup.SearchByCpf(input.CustomerCpf);
             response.Message += $"\n{result}\n";
 
             return Json(response);
@@ -202,9 +241,15 @@ public class NameInput
     public string CustomerName { get; set; } = string.Empty;
 }
 
+public class CpfInput
+{
+    public string CustomerCpf { get; set; } = string.Empty;
+}
+
 public class ChatResponse
 {
     public string Message { get; set; } = string.Empty;
     public bool RequiresNameInput { get; set; }
+    public bool RequiresCpfInput { get; set; }
     public bool IsExit { get; set; }
 }
