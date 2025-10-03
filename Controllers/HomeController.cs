@@ -35,7 +35,7 @@ public class HomeController : Controller
     {
         // Mensagem de boas-vindas igual ao terminal
         var welcomeMessage = new StringBuilder();
-        welcomeMessage.AppendLine("=== 🤖 Zoop AI Analyst (MVP) ===");
+    welcomeMessage.AppendLine("=== 🤖 ZoopIA (MVP) ===");
         welcomeMessage.AppendLine("Sistema de análise automática de cobranças indevidas");
         welcomeMessage.AppendLine();
         welcomeMessage.AppendLine("📝 COMO USAR:");
@@ -80,7 +80,7 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
         if (command.Equals("sair", StringComparison.OrdinalIgnoreCase) ||
             command.Equals("exit", StringComparison.OrdinalIgnoreCase))
         {
-            response.Message = "👋 Encerrando Zoop AI Analyst. Até logo!\n========================================";
+            response.Message = "👋 Encerrando ZoopIA. Até logo!\n========================================";
             response.IsExit = true;
             return Json(response);
         }

@@ -81,7 +81,7 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 // Mensagem de inicialização
-Console.WriteLine("🚀 Zoop AI Analyst Web iniciado!");
+Console.WriteLine("🚀 ZoopIA Web iniciado!");
 Console.WriteLine("📱 Acesse: https://localhost:5000");
 
 app.Run();

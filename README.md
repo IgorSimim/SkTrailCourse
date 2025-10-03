@@ -1,4 +1,4 @@
-# 🤖 Zoop AI Analyst – Sistema Inteligente de Análise de Cobranças
+# 🤖 ZoopIA – Sistema Inteligente de Análise de Cobranças
 
 Sistema avançado de análise automática de cobranças e disputas construído com **.NET 8 + Microsoft Semantic Kernel** e **Google Gemini**.
 
@@ -18,7 +18,7 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 - **Sistema completo de lookup** de boletos por nome do cliente
 - **Busca flexível** com remoção de acentos e correspondência parcial
 - **Base de dados JSON** com empresas e boletos cadastrados
-- **Identificação automática** quando Zoop é intermediária de pagamento
+  - **Identificação automática** quando Zoop é intermediária de pagamento
 
 ### ⚡ Decisões Automatizadas
 - **Reembolso automático** para valores ≤ R$50,00
