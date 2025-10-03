@@ -4,9 +4,28 @@ Sistema avançado de análise automática de cobranças e disputas construído c
 
 O sistema processa reclamações de clientes em linguagem natural, consulta boletos em tempo real, e toma decisões automatizadas baseadas em políticas de negócio da Zoop.
 
+## 🌐 Interface Web Moderna
+
+**Nova funcionalidade!** O ZoopIA agora possui uma interface web completa e intuitiva:
+
+- **Terminal interativo** com design moderno inspirado no tema Zoop
+- **Chat em tempo real** para interação natural com a IA
+- **Consulta de boletos** com entrada de CPF integrada
+- **Cores inteligentes** que se adaptam ao tipo de resposta (sucesso, erro, aviso)
+- **Design responsivo** que funciona em desktop e mobile
+- **Comandos de ajuda** integrados com modal explicativo
+
 ---
 
 ## 🚀 Funcionalidades Principais
+
+### 🌐 Interface Web Completa
+- **Terminal web interativo** com design moderno e responsivo
+- **Chat em tempo real** para comunicação natural com a IA
+- **Entrada de CPF integrada** para consultas de boletos
+- **Sistema de cores inteligente** (sucesso, erro, aviso, informação)
+- **Modal de ajuda** com todos os comandos disponíveis
+- **Limpeza de terminal** e controles de interface intuitivos
 
 ### 🧠 Análise Inteligente com IA
 - **Processamento de linguagem natural** para entender reclamações e consultas
@@ -15,10 +34,10 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 - **Orquestração completa** do fluxo de análise com DisputeOrchestrator
 
 ### 🔍 Consulta de Boletos
-- **Sistema completo de lookup** de boletos por nome do cliente
+- **Sistema completo de lookup** de boletos por CPF do cliente
 - **Busca flexível** com remoção de acentos e correspondência parcial
 - **Base de dados JSON** com empresas e boletos cadastrados
-  - **Identificação automática** quando Zoop é intermediária de pagamento
+- **Identificação automática** quando Zoop é intermediária de pagamento
 
 ### ⚡ Decisões Automatizadas
 - **Reembolso automático** para valores ≤ R$50,00
@@ -29,7 +48,7 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 ### 📊 Gerenciamento Completo de Disputas
 - **CRUD completo** de disputas (criar, listar, atualizar, excluir, mostrar)
 - **Persistência em JSON** (pasta `data/`)
-- **Interface CLI interativa** com comandos intuitivos
+- **Interface web e CLI** com comandos intuitivos
 - **Histórico completo** de ações e status
 
 ---
@@ -38,6 +57,16 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 
 ```
 /SkTrailCourse
+ ├── Controllers/
+ │    └── HomeController.cs      # Controller MVC para interface web
+ ├── Views/
+ │    └── Home/
+ │         └── Index.cshtml      # Interface web principal
+ ├── wwwroot/
+ │    ├── img/
+ │    │    └── logo-zoop.webp    # Logo da Zoop
+ │    └── js/
+ │         └── chat.js           # JavaScript para chat (legado)
  ├── Infra/
  │    ├── AIIntentRouter.cs      # Roteamento inteligente de comandos
  │    └── JsonMemoryStore.cs     # Persistência local em JSON
@@ -50,7 +79,7 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
  ├── data/
  │    ├── disputes.json          # Armazenamento de disputas
  │    └── boletos.json          # Base de boletos e empresas
- ├── Program.cs                  # Interface CLI interativa
+ ├── Program.cs                  # Aplicação web ASP.NET Core
  └── .env                        # Configurações da API Gemini
 ```
 
@@ -79,6 +108,8 @@ dotnet restore
 dotnet run
 ```
 
+**Acesse a interface web em:** `https://localhost:5001` ou `http://localhost:5000`
+
 ### 4. Executar testes
 
 ```bash
@@ -90,15 +121,25 @@ dotnet test
 
 ## 💻 Exemplos de Uso
 
+### 🌐 Interface Web
+
+A interface web oferece uma experiência moderna e intuitiva:
+
+1. **Acesse** `https://localhost:5001` após executar o projeto
+2. **Digite comandos** no terminal interativo
+3. **Use o botão de ajuda** (❔) para ver todos os comandos disponíveis
+4. **Aproveite as cores inteligentes** que destacam diferentes tipos de resposta
+
 ### 🔍 Consulta de Boletos
 
+**Na interface web:**
 ```
 💬 > verifiquei uma compra de 150 reais no meu boleto
 🔍 Analisando: 'verifiquei uma compra de 150 reais no meu boleto'
-🎯 Roteado para: BoletoLookup.SearchByCustomerName
-👤 Por favor, informe seu nome completo para consulta: João Silva Santos
+👤 Por favor, informe seu CPF (somente números ou formato padrão) para consulta:
+[Campo de CPF aparece automaticamente]
 
-✅ Encontramos 2 boleto(s) para 'João Silva Santos':
+✅ Encontramos 2 boleto(s) para o CPF informado:
 
 📄 Boleto BLT_2024001 - R$ 150,00 (vencimento 2024-12-10)
    Emitido por: Zoop Tech Ltda
@@ -195,12 +236,20 @@ Texto: Não reconheço a cobrança de 39,90 da Netflix
 
 ## 🛠️ Tecnologias
 
+### Backend
 - **.NET 8** - Framework principal
+- **ASP.NET Core MVC** - Framework web
 - **Microsoft Semantic Kernel 1.65.0** - Orquestração de IA
 - **Google Gemini 2.0 Flash** - Modelo de linguagem
 - **System.Text.Json** - Serialização e persistência
 - **DotNetEnv** - Gerenciamento de variáveis de ambiente
 - **xUnit** - Framework de testes
+
+### Frontend
+- **Bootstrap 5** - Framework CSS responsivo
+- **JavaScript Vanilla** - Interatividade do terminal web
+- **CSS3 com Gradientes** - Design moderno com cores da Zoop
+- **Responsive Design** - Compatível com desktop e mobile
 
 ---
 
@@ -226,9 +275,10 @@ dotnet test --verbosity normal
 ## 📈 Próximos Passos
 
 ### 🌐 Interface e Integração
-- **Interface Web** com Blazor Server
+- ✅ **Interface Web** completa e responsiva (implementada!)
 - **API REST** para integração externa
 - **Webhooks** para notificações em tempo real
+- **PWA (Progressive Web App)** para uso offline
 
 ### 🔒 Segurança e Autenticação
 - **Autenticação JWT** para usuários
@@ -254,4 +304,4 @@ dotnet test --verbosity normal
 
 ---
 
-*Desenvolvido usando .NET 8 e Microsoft Semantic Kernel*
+*Desenvolvido com .NET 8, ASP.NET Core MVC e Microsoft Semantic Kernel*
