@@ -10,265 +10,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/img/logo.png" />
     <title>@ViewData["Title"]</title>
-    <!-- Bootstrap 5 CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <style>
-        :root {
-            --color-zoop-orange: #FF5C00;
-            --color-zoop-pink: #FF2D92;
-            --color-bg-primary: #121212;
-            --color-bg-secondary: #1e1e1e;
-            --color-input-bg: #2b2b2b;
-        }
-
-        body {
-            background: var(--color-bg-primary);
-            margin: 0;
-            padding: 20px;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #fff;
-        }
-
-        /* Estilo para os botões de controle do Header */
-        .btn-header-control {
-            background-color: rgba(255, 255, 255, 0.2) !important;
-            color: #fff !important;
-            border: 1px solid rgba(255, 255, 255, 0.4) !important;
-            font-weight: 500;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-        }
-
-        .btn-header-control:hover {
-            background-color: var(--color-zoop-orange) !important;
-            border-color: var(--color-zoop-orange) !important;
-            color: #121212 !important;
-            filter: brightness(1.1);
-            transform: scale(1.02);
-        }
-
-        /* Ícone de texto */
-        .btn-header-control .icon-text {
-            font-weight: bold;
-            margin-right: 4px;
-            font-size: 16px;
-        }
-
-        /* Container do terminal */
-        .terminal-container {
-            background: var(--color-bg-secondary);
-            border-radius: 16px;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-            overflow: hidden;
-            border: 1px solid #333;
-        }
-
-        /* Header com gradiente Zoop */
-        .terminal-header {
-            background: linear-gradient(135deg, var(--color-zoop-orange), var(--color-zoop-pink));
-            padding: 18px 25px;
-            color: #fff;
-        }
-
-        .terminal-header img {
-            filter: drop-shadow(0 0 6px rgba(255, 92, 0, 0.6));
-        }
-
-        .terminal-header h4 {
-            font-weight: 800;
-            margin: 0;
-            text-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
-            transition: color 0.3s, text-shadow 0.3s;
-        }
-
-        .terminal-header h4:hover {
-            text-shadow: 0 0 12px rgba(255, 92, 0, 0.8);
-            color: #fff;
-        }
-
-
-        .terminal-body {
-            height: 65vh;
-            overflow-y: auto;
-            padding: 15px 25px !important;
-            background: #181818;
-            color: #f1f1f1;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 15px;
-            line-height: 1.5;
-        }
-
-        /* Input container */
-        .terminal-input-container {
-            background: var(--color-input-bg);
-            padding: 15px 25px;
-            border-top: 1px solid #444;
-        }
-
-        /* Input estilizado */
-        .terminal-input {
-            background: #181818 !important;
-            color: #fff !important;
-            border: 1px solid #444 !important;
-            font-family: 'Consolas', 'Courier New', monospace !important;
-            border-radius: 8px !important;
-        }
-
-        .terminal-input:focus {
-            border-color: var(--color-zoop-orange) !important;
-            box-shadow: 0 0 0 0.2rem rgba(255, 92, 0, 0.35) !important;
-        }
-
-        /* Botão estilo Zoop */
-        .btn-terminal {
-            background: linear-gradient(135deg, var(--color-zoop-orange), var(--color-zoop-pink));
-            color: #fff;
-            border: none;
-            font-weight: bold;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
-
-        .btn-terminal:hover {
-            filter: brightness(1.2);
-            transform: scale(1.02);
-        }
-
-        /* Scrollbar */
-        .terminal-body::-webkit-scrollbar {
-            width: 10px;
-        }
-
-        .terminal-body::-webkit-scrollbar-track {
-            background: var(--color-bg-secondary);
-        }
-
-        .terminal-body::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, var(--color-zoop-orange), var(--color-zoop-pink));
-            border-radius: 5px;
-        }
-
-        .modal-content {
-            background: #1e1e1e;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-        }
-
-        .modal-header .modal-title {
-            font-size: 1.6rem;
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .modal-header {
-            background: linear-gradient(135deg, var(--color-zoop-orange),
-                    var(--color-zoop-pink));
-        }
-
-        /* Coluna única */
-        .help-modal-body {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        /* Card */
-        .command-card {
-            background: #222;
-            border-radius: 12px;
-            padding: 12px 16px;
-            transition: all 0.3s ease;
-            border: 1px solid #333;
-        }
-
-        .command-card:hover {
-            border-color: var(--color-zoop-orange);
-            box-shadow: 0 0 10px rgba(255, 92, 0, 0.3);
-            transform: translateY(-2px);
-        }
-
-        /* Badge */
-        .command-badge {
-            display: inline-block;
-            font-weight: 600;
-            font-size: 1rem;
-            padding: 6px 10px;
-            border-radius: 8px;
-        }
-
-        /* Descrição */
-        .command-desc {
-            font-size: 0.9rem;
-            color: #bbb;
-            margin: 6px 0 0 0;
-            line-height: 1.4;
-        }
-
-        /* Dica no final */
-        .command-tip {
-            font-size: 0.85rem;
-            color: #aaa;
-            font-style: italic;
-            margin-top: 16px;
-            line-height: 1.4;
-        }
-
-        /* Mensagem do usuário */
-        .user-message {
-            color: var(--color-zoop-orange);
-            font-weight: bold;
-            padding: 2px 0;
-        }
-
-        /* Mensagem do sistema */
-        .system-message {
-            color: #f1f1f1;
-            padding: 2px 0;
-        }
-
-        /* Mensagens de sucesso */
-        .success-message {
-            color: #00e676;
-            font-weight: 500;
-            padding: 2px 0;
-        }
-
-        /* Mensagens de erro */
-        .error-message {
-            color: var(--color-zoop-pink);
-            font-weight: 500;
-            padding: 2px 0;
-        }
-
-        /* Mensagens de informação */
-        .warning-message,
-        .info-message {
-            color: var(--color-zoop-orange);
-            font-weight: 500;
-            padding: 2px 0;
-        }
-
-        @@keyframes blink {
-
-            0%,
-            50% {
-                opacity: 1;
-            }
-
-            51%,
-            100% {
-                opacity: 0;
-            }
-        }
-
-        .typing-indicator::after {
-            content: '▊';
-            animation: blink 1s infinite;
-            color: var(--color-zoop-orange);
-        }
-    </style>
+    <link href="/css/style.css" rel="stylesheet" />
 </head>
 
 <body>
@@ -276,16 +19,17 @@
         <div class="row justify-content-center">
             <div class="col-12 col-lg-10 col-xl-8">
                 <div class="terminal-container">
+
+                    <!-- HEADER -->
                     <div class="terminal-header">
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
-                                <img src="/img/logo.png" alt="Logo ZoopIA" style="height:60px; margin-right:10px;">
+                                <img src="/img/logo.png" alt="Logo ZoopIA">
                                 <div>
-                                    <h4 class="mb-1">ZoopIA</h4>
-                                    <small>Plataforma de rastreamento e análise de disputas de cobrança</small>
+                                    <h3 class="mb-1">ZoopIA</h3>
+                                    <p>Plataforma de rastreamento e análise de disputas de cobrança</p>
                                 </div>
                             </div>
-
                             <div>
                                 <button class="btn btn-sm btn-header-control me-2" onclick="clearTerminal()">
                                     <span class="icon-text">⟳</span> Limpar
@@ -298,14 +42,14 @@
                         </div>
                     </div>
 
+                    <!-- TERMINAL OUTPUT -->
+                    <div class="terminal-body" id="terminalOutput"></div>
 
-                    <div class="terminal-body" id="terminalOutput">
-                    </div>
-
+                    <!-- INPUT CONTAINER -->
                     <div class="terminal-input-container">
                         <div id="normalInput">
                             <div class="input-group">
-                                <span class="input-group-text bg-dark text-white border-dark">💬</span>
+                                <span class="input-group-text">💬</span>
                                 <input type="text" class="form-control terminal-input" id="commandInput"
                                     placeholder="Descreva a cobrança que não reconhece (ex: 'Cobrança de 39,90 da FitEasy')..."
                                     autocomplete="off" autofocus>
@@ -317,9 +61,9 @@
                             </div>
                         </div>
 
-                        <div id="cpfInput" class="mt-3" style="display: none;">
+                        <div id="cpfInput" class="mt-3">
                             <div class="input-group">
-                                <span class="input-group-text bg-dark text-white border-dark">👤</span>
+                                <span class="input-group-text">👤</span>
                                 <input type="text" class="form-control terminal-input" id="customerCpfInput"
                                     placeholder="Digite seu CPF (apenas números)" autocomplete="off">
                                 <button class="btn btn-terminal" onclick="searchBoletos()">
@@ -334,25 +78,19 @@
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Help Modal -->
+    <!-- MODAL DE AJUDA -->
     <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-dialog modal-dialog-centered modal-lg mx-auto">
             <div class="modal-content text-white">
-
-                <!-- Header -->
                 <div class="modal-header border-0">
-                    <h5 class="modal-title fw-bold" id="helpModalLabel">💡 Ajuda - comandos</h5>
+                    <h4 class="modal-title fw-bold" id="helpModalLabel">💡 Ajuda - comandos</h4>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                         aria-label="Close"></button>
                 </div>
 
-                <!-- Body -->
                 <div class="modal-body help-modal-body">
                     <div class="command-card">
-                        <span class="command-badge bg-info text-dark">Listar empresas</span>
+                        <span class="command-badge bg-info">Listar empresas</span>
                         <p class="command-desc">Mostra empresas cadastradas</p>
                     </div>
 
@@ -377,179 +115,16 @@
                     </p>
                 </div>
 
-
-                <!-- Footer -->
                 <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-terminal px-4" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-terminal rounded px-4 py-2"
+                        data-bs-dismiss="modal">Fechar</button>
                 </div>
             </div>
         </div>
     </div>
 
-
-    <script>
-        // Elementos DOM
-        const outputText = document.getElementById('outputText');
-        const commandInput = document.getElementById('commandInput');
-        const terminalOutput = document.getElementById('terminalOutput');
-        const normalInput = document.getElementById('normalInput');
-        const cpfInput = document.getElementById('cpfInput');
-        const customerCpfInput = document.getElementById('customerCpfInput');
-        const sendButton = document.getElementById('sendButton');
-        const sendText = document.getElementById('sendText');
-        const loadingSpinner = document.getElementById('loadingSpinner');
-
-        // Foco no input principal
-        commandInput.focus();
-
-        // Enviar comando com Enter
-        commandInput.addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                sendCommand();
-            }
-        });
-
-        // Enviar CPF com Enter
-        customerCpfInput.addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                searchBoletos();
-            }
-        });
-
-        async function sendCommand() {
-            const command = commandInput.value.trim();
-            if (!command) return;
-
-            // Mostra loading
-            sendText.classList.add('d-none');
-            loadingSpinner.classList.remove('d-none');
-            sendButton.disabled = true;
-
-            // Adiciona comando do usuário ao terminal
-            addToTerminal(`<div class="message-container"><span class="user-message">💬 > ${command}</span></div>`, true);
-
-            // Limpa input
-            commandInput.value = '';
-
-            try {
-                const response = await fetch('/Home/ProcessCommand', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: command })
-                });
-
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-                const result = await response.json();
-
-                if (result.isExit) {
-                    addToTerminal(`<div class="message-container"><span class="system-message">${result.message}</span></div>`, true);
-                    commandInput.disabled = true;
-                    return;
-                }
-
-                if (result.requiresCpfInput) {
-                    normalInput.style.display = 'none';
-                    cpfInput.style.display = 'block';
-                    customerCpfInput.focus();
-                }
-
-                // Aplica cores baseadas no conteúdo da mensagem
-                const formattedMessage = applyMessageColors(result.message);
-                addToTerminal(formattedMessage, true);
-
-            } catch (error) {
-                addToTerminal(`<div class="message-container"><span class="error-message">❌ Erro de conexão: ${error.message}. Tente novamente.</span></div>`, true);
-            } finally {
-                sendText.classList.remove('d-none');
-                loadingSpinner.classList.add('d-none');
-                sendButton.disabled = false;
-            }
-        }
-
-        // Função para aplicar cores automaticamente baseadas no conteúdo
-        function applyMessageColors(message) {
-            const formattedMessage = message.replace(/\n/g, '<br>');
-
-            // Determina a classe de cor baseada no conteúdo
-            let messageClass = 'system-message'; // padrão
-
-            if (message.includes('❌') || message.includes('Erro') || message.includes('não pode')) {
-                messageClass = 'error-message';
-            } else if (message.includes('✅') || message.includes('sucesso') || message.includes('Sucesso')) {
-                messageClass = 'success-message';
-            } else if (message.includes('⚠️') || message.includes('Atenção') || message.includes('atenção')) {
-                messageClass = 'warning-message';
-            } else if (message.includes('🔍') || message.includes('Consultando') || message.includes('analisando')) {
-                messageClass = 'info-message';
-            } else if (message.includes('💡') || message.includes('Dica')) {
-                messageClass = 'info-message';
-            }
-
-            return `<div class="message-container"><span class="${messageClass}">${formattedMessage}</span></div>`;
-        }
-
-        async function searchBoletos() {
-            const customerCpf = customerCpfInput.value.trim();
-            if (!customerCpf) {
-                addToTerminal('<div class="message-container"><span class="error-message">❌ Por favor, digite um CPF válido.</span></div>', true);
-                return;
-            }
-
-            addToTerminal(`<div class="message-container"><span class="info-message">👤 CPF informado: ${customerCpf}</span></div>`, true);
-
-            sendText.classList.add('d-none');
-            loadingSpinner.classList.remove('d-none');
-
-            cpfInput.style.display = 'none';
-            normalInput.style.display = 'block';
-            customerCpfInput.value = '';
-
-            try {
-                const response = await fetch('/Home/SearchBoletos', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ customerCpf: customerCpf })
-                });
-
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-                const result = await response.json();
-                const formattedMessage = applyMessageColors(result.message);
-                addToTerminal(formattedMessage, true);
-
-            } catch (error) {
-                addToTerminal(`<div class="message-container"><span class="error-message">❌ Erro na consulta: ${error.message}</span></div>`, true);
-            } finally {
-                sendText.classList.remove('d-none');
-                loadingSpinner.classList.add('d-none');
-                commandInput.focus();
-            }
-        }
-
-        function cancelCpfInput() {
-            cpfInput.style.display = 'none';
-            normalInput.style.display = 'block';
-            customerCpfInput.value = '';
-            commandInput.focus();
-            addToTerminal('<div class="message-container"><span class="warning-message">❌ Consulta de boletos cancelada.</span></div>', true);
-        }
-
-        function addToTerminal(html, scroll = false) {
-            const div = document.createElement('div');
-            div.innerHTML = html;
-            outputText.appendChild(div);
-
-            if (scroll) {
-                terminalOutput.scrollTop = terminalOutput.scrollHeight;
-            }
-        }
-
-        function clearTerminal() {
-            outputText.innerHTML = '';
-            addToTerminal('<div class="message-container"><span class="system-message">🧹 Terminal limpo.<br>----------------------------------------</span></div>', true);
-        }
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/terminal.js"></script>
 </body>
 
 </html>
