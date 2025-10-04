@@ -6,14 +6,15 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 
 ## 🌐 Interface Web Moderna
 
-**Nova funcionalidade!** O ZoopIA agora possui uma interface web completa e intuitiva:
+**Funcionalidade principal!** O ZoopIA possui uma interface web completa e intuitiva:
 
 - **Terminal interativo** com design moderno inspirado no tema Zoop
 - **Chat em tempo real** para interação natural com a IA
-- **Consulta de boletos** com entrada de CPF integrada
-- **Cores inteligentes** que se adaptam ao tipo de resposta (sucesso, erro, aviso)
-- **Design responsivo** que funciona em desktop e mobile
-- **Comandos de ajuda** integrados com modal explicativo
+- **Consulta de boletos** com entrada de CPF integrada e automática
+- **Sistema de cores inteligente** que se adapta ao tipo de resposta (sucesso, erro, aviso, info)
+- **Design responsivo** otimizado para desktop e mobile
+- **Modal de ajuda** com comandos disponíveis e exemplos práticos
+- **Controles de terminal** (limpar, ajuda) integrados no header
 
 ---
 
@@ -22,10 +23,11 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 ### 🌐 Interface Web Completa
 - **Terminal web interativo** com design moderno e responsivo
 - **Chat em tempo real** para comunicação natural com a IA
-- **Entrada de CPF integrada** para consultas de boletos
-- **Sistema de cores inteligente** (sucesso, erro, aviso, informação)
-- **Modal de ajuda** com todos os comandos disponíveis
-- **Limpeza de terminal** e controles de interface intuitivos
+- **Entrada de CPF automática** para consultas de boletos (detecta quando necessário)
+- **Sistema de cores inteligente** (sucesso ✅, erro ❌, aviso ⚠️, informação 🔍)
+- **Modal de ajuda** com comandos e exemplos práticos
+- **Controles de terminal** (limpar ⟳, ajuda i) no header
+- **Loading states** e feedback visual durante processamento
 
 ### 🧠 Análise Inteligente com IA
 - **Processamento de linguagem natural** para entender reclamações e consultas
@@ -38,6 +40,8 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 - **Busca flexível** com remoção de acentos e correspondência parcial
 - **Base de dados JSON** com empresas e boletos cadastrados
 - **Identificação automática** quando Zoop é intermediária de pagamento
+- **Interface CPF integrada** que aparece automaticamente quando necessário
+- **Validação e formatação** de CPF em tempo real
 
 ### ⚡ Decisões Automatizadas
 - **Reembolso automático** para valores ≤ R$50,00
@@ -58,29 +62,34 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 ```
 /SkTrailCourse
  ├── Controllers/
- │    └── HomeController.cs      # Controller MVC para interface web
+ │    └── HomeController.cs      # Controller MVC com APIs ProcessCommand e SearchBoletos
  ├── Views/
  │    └── Home/
- │         └── Index.cshtml      # Interface web principal
+ │         └── Index.cshtml      # Interface web principal com terminal interativo
  ├── wwwroot/
+ │    ├── css/
+ │    │    └── style.css         # Estilos modernos com tema Zoop
  │    ├── img/
- │    │    └── logo-zoop.webp    # Logo da Zoop
+ │    │    ├── logo-zoop.webp    # Logo da Zoop
+ │    │    └── logo.png          # Logo alternativo
  │    └── js/
- │         └── chat.js           # JavaScript para chat (legado)
+ │         ├── chat.js           # JavaScript legado
+ │         └── terminal.js       # JavaScript principal do terminal interativo
  ├── Infra/
  │    ├── AIIntentRouter.cs      # Roteamento inteligente de comandos
  │    └── JsonMemoryStore.cs     # Persistência local em JSON
  ├── Plugins/
  │    ├── DisputePlugin.cs       # CRUD completo de disputas
  │    ├── DisputeOrchestrator.cs # Orquestração e políticas de negócio
- │    ├── BoletoLookupPlugin.cs  # Consulta de boletos e empresas
+ │    ├── BoletoLookupPlugin.cs  # Consulta de boletos por nome e CPF
  │    └── SupportPlugin.cs       # Políticas e relatórios de suporte
  ├── SkTrailCourse.Tests/        # Testes unitários
  ├── data/
- │    ├── disputes.json          # Armazenamento de disputas
+ │    ├── disputes.json          # Armazenamento de disputas (criado automaticamente)
  │    └── boletos.json          # Base de boletos e empresas
  ├── Program.cs                  # Aplicação web ASP.NET Core
- └── .env                        # Configurações da API Gemini
+ ├── SkTrailCourse.csproj        # Configuração do projeto
+ └── .env                        # Configurações da API Gemini (criar manualmente)
 ```
 
 ---
@@ -97,7 +106,7 @@ Crie o arquivo `.env` na raiz do projeto:
 
 ```env
 GOOGLE_API_KEY=sua_chave_do_google_ai_studio
-AI_MODEL_ID=gemini-2.5-flash
+AI_MODEL_ID=gemini-2.0-flash-exp
 ```
 
 ### 3. Executar o sistema
@@ -108,7 +117,7 @@ dotnet restore
 dotnet run
 ```
 
-**Acesse a interface web em:** `https://localhost:5001` ou `http://localhost:5000`
+**Acesse a interface web em:** `https://localhost:5000` (HTTPS) ou `http://localhost:5000` (HTTP)
 
 ### 4. Executar testes
 
@@ -125,21 +134,25 @@ dotnet test
 
 A interface web oferece uma experiência moderna e intuitiva:
 
-1. **Acesse** `https://localhost:5001` após executar o projeto
+1. **Acesse** `https://localhost:5000` após executar o projeto
 2. **Digite comandos** no terminal interativo
-3. **Use o botão de ajuda** (❔) para ver todos os comandos disponíveis
-4. **Aproveite as cores inteligentes** que destacam diferentes tipos de resposta
+3. **Use o botão de ajuda** (i) para ver todos os comandos disponíveis
+4. **Use o botão limpar** (⟳) para limpar o terminal
+5. **Aproveite as cores inteligentes** que destacam diferentes tipos de resposta
+6. **Interface CPF automática** aparece quando necessário para consultas
 
 ### 🔍 Consulta de Boletos
 
 **Na interface web:**
 ```
 💬 > verifiquei uma compra de 150 reais no meu boleto
-🔍 Analisando: 'verifiquei uma compra de 150 reais no meu boleto'
 👤 Por favor, informe seu CPF (somente números ou formato padrão) para consulta:
-[Campo de CPF aparece automaticamente]
+[Campo de CPF aparece automaticamente na interface]
 
-✅ Encontramos 2 boleto(s) para o CPF informado:
+👤 CPF informado: 123.456.789-00
+🔍 Consultando boletos para o CPF: 123.456.789-00...
+
+✅ Encontramos 2 boleto(s) para o CPF '123.456.789-00':
 
 📄 Boleto BLT_2024001 - R$ 150,00 (vencimento 2024-12-10)
    Emitido por: Zoop Tech Ltda
@@ -240,16 +253,18 @@ Texto: Não reconheço a cobrança de 39,90 da Netflix
 - **.NET 8** - Framework principal
 - **ASP.NET Core MVC** - Framework web
 - **Microsoft Semantic Kernel 1.65.0** - Orquestração de IA
-- **Google Gemini 2.0 Flash** - Modelo de linguagem
+- **Google Gemini 2.0 Flash Experimental** - Modelo de linguagem
 - **System.Text.Json** - Serialização e persistência
-- **DotNetEnv** - Gerenciamento de variáveis de ambiente
+- **DotNetEnv 3.1.1** - Gerenciamento de variáveis de ambiente
+- **Microsoft.Extensions.Http 9.0.9** - Cliente HTTP
 - **xUnit** - Framework de testes
 
 ### Frontend
-- **Bootstrap 5** - Framework CSS responsivo
-- **JavaScript Vanilla** - Interatividade do terminal web
-- **CSS3 com Gradientes** - Design moderno com cores da Zoop
+- **Bootstrap 5.3.0** - Framework CSS responsivo
+- **JavaScript Vanilla** - Interatividade do terminal web (terminal.js)
+- **CSS3 com Variáveis CSS** - Design moderno com tema Zoop
 - **Responsive Design** - Compatível com desktop e mobile
+- **Modal Components** - Interface de ajuda integrada
 
 ---
 
@@ -276,9 +291,10 @@ dotnet test --verbosity normal
 
 ### 🌐 Interface e Integração
 - ✅ **Interface Web** completa e responsiva (implementada!)
-- **API REST** para integração externa
+- ✅ **APIs REST** para ProcessCommand e SearchBoletos (implementadas!)
 - **Webhooks** para notificações em tempo real
 - **PWA (Progressive Web App)** para uso offline
+- **API de consulta direta** por CPF
 
 ### 🔒 Segurança e Autenticação
 - **Autenticação JWT** para usuários
