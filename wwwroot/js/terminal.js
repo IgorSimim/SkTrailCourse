@@ -31,15 +31,18 @@ if (elements.cpfInput) {
 }
 
 // ========== INICIALIZAÇÃO ==========
-elements.commandInput.focus();
+if (elements.commandInput) {
+    elements.commandInput.focus();
+    elements.commandInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendCommand();
+    });
+}
 
-elements.commandInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendCommand();
-});
-
-elements.customerCpfInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') searchBoletos();
-});
+if (elements.customerCpfInput) {
+    elements.customerCpfInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') searchBoletos();
+    });
+}
 
 // ========== FUNÇÕES PRINCIPAIS ==========
 async function sendCommand() {
@@ -128,7 +131,6 @@ function cancelCpfInput() {
 
 function clearTerminal() {
     elements.outputText.innerHTML = '';
-    addToTerminal('<div class="message-container"><span class="system-message">🧹 Terminal limpo.<br>----------------------------------------</span></div>', true);
 }
 
 // ========== FUNÇÕES AUXILIARES ==========

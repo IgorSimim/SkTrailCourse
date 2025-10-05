@@ -91,26 +91,71 @@
                 </div>
 
                 <div class="modal-body help-modal-body">
-                    <!-- 'Listar empresas' comando removido -->
+                    <!-- Comprehensive help content: commands, examples and flows -->
 
+                    <h5>O que este sistema faz</h5>
+                    <ul>
+                        <li>Detecta cobranças suspeitas e sugere ações (consulta, reclamação, análise manual).</li>
+                        <li>Consulta boletos por CPF (fluxo interativo: pede CPF).</li>
+                        <li>Registra reclamações (disputas) com extração de estabelecimento, valor e resumo automático.</li>
+                        <li>Permite atualizar, editar, listar e excluir disputas por ID.</li>
+                        <li>Suporta confirmações em linguagem natural (ex.: quando "Zoop" é ambíguo, pergunta se quer consultar ou reclamar).</li>
+                    </ul>
+
+                    <h5>Comandos rápidos</h5>
                     <div class="command-card">
-                        <span class="command-badge bg-secondary">Mostrar ABC123</span>
-                        <p class="command-desc">Detalhes de uma disputa específica</p>
+                        <span class="command-badge bg-primary">consultar</span>
+                        <p class="command-desc">Inicia fluxo de consulta (sugerido quando mencionar boleto/cobrança). O sistema pedirá CPF.</p>
                     </div>
 
                     <div class="command-card">
-                        <span class="command-badge bg-success">Atualizar ABC123 para resolvida</span>
-                        <p class="command-desc">Atualiza status de uma disputa</p>
+                        <span class="command-badge bg-warning">reclamar / quero reclamar</span>
+                        <p class="command-desc">Abre fluxo de reclamação. Descreva a cobrança indevida com o máximo de detalhes.</p>
                     </div>
 
                     <div class="command-card">
-                        <span class="command-badge bg-danger">Excluir ABC123</span>
-                        <p class="command-desc">Remove uma disputa</p>
+                        <span class="command-badge bg-secondary">mostrar &lt;ID&gt;</span>
+                        <p class="command-desc">Mostra detalhes de uma disputa pelo ID (ex: "mostrar ABC123").</p>
                     </div>
+
+                    <div class="command-card">
+                        <span class="command-badge bg-success">atualizar &lt;ID&gt; para resolvida</span>
+                        <p class="command-desc">Marca uma disputa como resolvida (ex: "atualizar ABC123 para resolvida").</p>
+                    </div>
+
+                    <div class="command-card">
+                        <span class="command-badge bg-danger">excluir &lt;ID&gt;</span>
+                        <p class="command-desc">Remove uma disputa (ex: "excluir ABC123").</p>
+                    </div>
+
+                    <hr />
+
+                    <h5>Exemplos de mensagens naturais</h5>
+                    <ul>
+                        <li>"Verifiquei uma cobrança de R$ 39,90 da Zoop no meu boleto" — o sistema detecta Zoop/ambiguidade e pode pedir confirmação.</li>
+                        <li>"Não reconheço uma compra de 150 reais da Netflix" — inicia reclamação automática.</li>
+                        <li>"Achei um débito estranho no meu extrato de 12/09 de R$ 20,00" — o sistema extrai valor e data quando possível.</li>
+                        <li>"Quero reclamar de uma cobrança indevida" — pede detalhes se necessário.</li>
+                        <li>"Tem uma cobrana da Zoop no meu boleto" — se ambíguo, o sistema pergunta: CONSULTAR ou RECLAMAR?</li>
+                    </ul>
+
+                    <h5>Fluxos interativos</h5>
+                    <ol>
+                        <li>Consulta de boletos: digite algo com "boleto" → responda à pergunta de confirmação (se pedir) → informe CPF quando solicitado → veja resultados.</li>
+                        <li>Reclamação a partir de uma consulta: após ver resultados, diga "quero reclamar" e o sistema usará o histórico da conversa para criar a reclamação consistente (ex: "zoop no boleto" + sua mensagem de reclamação).</li>
+                        <li>Quando o sistema não identificar o estabelecimento, ele solicitará: "Qual estabelecimento/empresa você quer reclamar?" — responda apenas com o nome (ex: "Netflix", "Loja X").</li>
+                    </ol>
+
+                    <h5>Boas práticas e dicas</h5>
+                    <ul>
+                        <li>Inclua valor, data e nome do estabelecimento quando souber — isso melhora a extração automática.</li>
+                        <li>Se não souber o estabelecimento, aguarde a pergunta do sistema e responda apenas com o nome.</li>
+                        <li>O sistema preserva o histórico recente; frasese curtas como "quero reclamar" logo após uma consulta serão entendidas no contexto.</li>
+                        <li>Evite usar palavrões no nome do estabelecimento — nomes ofensivos são rejeitados.</li>
+                    </ul>
 
                     <p class="command-tip">
-                        💡 Dica: descreva o problema com detalhes (valor, data, estabelecimento) para facilitar a
-                        análise automática.
+                        💡 Dica rápida: tente frases naturais — o sistema entende linguagem coloquial (ex: "não reconheço essa cobrança da Zoop") e faz follow-up automaticamente.
                     </p>
                 </div>
 

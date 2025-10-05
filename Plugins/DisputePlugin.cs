@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Microsoft.SemanticKernel;
 using SkTrailCourse.Infra;
 using System.Text.RegularExpressions;
+using System.Globalization;
 
 namespace SkTrailCourse.Plugins;
 
@@ -31,26 +32,148 @@ public class DisputePlugin
     [KernelFunction, Description("Registrar uma reclamação de cobrança indevida")]
     public async Task<string> AddDispute([Description("Texto da reclamação do cliente")] string complaint)
     {
-        var list = await _store.LoadListAsync<DisputeItem>(Key);
+        // Unifica extração do estabelecimento e usa o mesmo valor em todo o fluxo
+        try
+        {
+            // Extrai UMA vez usando heurísticas manuais (rápido e previsível)
+            var establishment = ExtractEstablishmentOnce(complaint);
 
-        var orchestratorResult = await _orchestrator.HandleAsync(complaint);
+            // Validação de conteúdo ofensivo: rejeita nomes impróprios
+            if (ContainsOffensiveContent(establishment))
+            {
+                return "❌ Conteúdo inadequado detectado. Por favor, use um nome apropriado.";
+            }
 
-        var id = Guid.NewGuid().ToString("N").Substring(0, 8);
-        var record = new DisputeItem(
-            Id: id,
-            CustomerText: complaint,
-            Merchant: orchestratorResult.Merchant ?? "desconhecido",
-            AmountCents: orchestratorResult.AmountCents,
-            Status: orchestratorResult.Status,
-            ActionTaken: orchestratorResult.ActionSummary,
-            CreatedAt: DateTime.UtcNow);
+            // Aceita qualquer estabelecimento (mesmo quando não foi extraído)
+            if (string.IsNullOrWhiteSpace(establishment))
+            {
+                establishment = "Estabelecimento a confirmar";
+            }
 
-        list.Add(record);
-        await _store.SaveListAsync(Key, list);
+            var list = await _store.LoadListAsync<DisputeItem>(Key);
 
-        return $@"📩 Reclamação registrada (id: {id}).
-🤖 Decisão da IA: {orchestratorResult.Action}
-Resumo: {orchestratorResult.ActionSummary}";
+            // Processa com o orquestrador para obter dados auxiliares (valores, ação, resumo),
+            // mas NÃO confiar no merchant retornado por ele: usaremos 'establishment' determinado acima
+            var orchestratorResult = await _orchestrator.HandleAsync(complaint);
+
+            var id = Guid.NewGuid().ToString("N").Substring(0, 8);
+            var record = new DisputeItem(
+                Id: id,
+                CustomerText: complaint,
+                Merchant: establishment,
+                AmountCents: orchestratorResult.AmountCents,
+                Status: orchestratorResult.Status,
+                ActionTaken: orchestratorResult.ActionSummary,
+                CreatedAt: DateTime.UtcNow);
+
+            list.Add(record);
+            await _store.SaveListAsync(Key, list);
+
+            // Gera resposta final CONSISTENTE usando o mesmo estabelecimento
+            var finalMessage = GenerateConsistentResponse(record, establishment, orchestratorResult);
+            return finalMessage;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro em AddDispute: {ex.Message}");
+            return $"❌ Erro ao registrar reclamação: {ex.Message}";
+        }
+    }
+
+    // Extrai estabelecimento usando heurísticas manuais primeiro e fallback para IA
+    private async Task<string?> ExtractAndValidateEstablishment(string userMessage)
+    {
+        if (string.IsNullOrWhiteSpace(userMessage)) return null;
+
+        var lower = userMessage.ToLowerInvariant();
+
+        // Detecção manual prioritária
+        if (lower.Contains("zoop") || lower.Contains("zoo ") || lower == "zoo") return "Zoop";
+        if (lower.Contains("netflix")) return "Netflix";
+        if (lower.Contains("spotify")) return "Spotify";
+        if (lower.Contains("amazon")) return "Amazon";
+
+        // Tentar heurística simples com merchant conhecido
+        var simple = ExtractMerchant(userMessage);
+        if (!string.IsNullOrWhiteSpace(simple)) return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(simple);
+
+        // Fallback: usar IA apenas quando as heurísticas falharem
+        try
+        {
+            var prompt = $"""
+Extraia APENAS o nome do estabelecimento desta mensagem.
+
+REGRAS:
+- "zoop" ou "zoo" -> "Zoop"
+- Netflix, Spotify, Amazon -> retorne o nome
+- Se não encontrar -> null
+
+Mensagem: "{userMessage}"
+Resposta (apenas nome ou null):
+""";
+
+            var result = await _kernel.InvokePromptAsync(prompt);
+            var establishment = result.ToString().Trim();
+            if (string.Equals(establishment, "null", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(establishment))
+                return null;
+            return establishment;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro ao extrair estabelecimento via IA: {ex.Message}");
+            return null;
+        }
+    }
+
+    private string GenerateConsistentResponse(DisputeItem dispute, string establishment, dynamic orchestratorResult)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"📩 Reclamação registrada (id: {dispute.Id}).");
+        sb.AppendLine($"📋 Estabelecimento: {establishment}");
+        if (orchestratorResult != null)
+        {
+            try
+            {
+                sb.AppendLine($"🤖 Decisão da IA: {orchestratorResult.Action}");
+                sb.AppendLine($"Resumo: {orchestratorResult.ActionSummary}");
+            }
+            catch
+            {
+                // ignore if dynamic properties missing
+            }
+        }
+        return sb.ToString();
+    }
+
+    [KernelFunction, Description("Registrar uma reclamação com estabelecimento informado pelo usuário")]
+    public async Task<string> AddDisputeWithMerchant([Description("Texto da reclamação do cliente")] string complaint, [Description("Nome do estabelecimento")] string merchant)
+    {
+        try
+        {
+            var list = await _store.LoadListAsync<DisputeItem>(Key);
+
+            var orchestratorResult = await _orchestrator.HandleAsync(complaint);
+
+            var id = Guid.NewGuid().ToString("N").Substring(0, 8);
+            var record = new DisputeItem(
+                Id: id,
+                CustomerText: complaint,
+                Merchant: merchant,
+                AmountCents: orchestratorResult.AmountCents,
+                Status: orchestratorResult.Status,
+                ActionTaken: orchestratorResult.ActionSummary,
+                CreatedAt: DateTime.UtcNow);
+
+            list.Add(record);
+            await _store.SaveListAsync(Key, list);
+
+            return $@"📩 Reclamação registrada (id: {id}).\n📋 Estabelecimento: {merchant}\n🤖 Decisão da IA: {orchestratorResult.Action}\nResumo: {orchestratorResult.ActionSummary}";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro em AddDisputeWithMerchant: {ex.Message}");
+            return $"❌ Erro ao registrar reclamação: {ex.Message}";
+        }
     }
 
     [KernelFunction, Description("Lista as reclamações registradas")]
@@ -282,6 +405,27 @@ TEXTO ATUALIZADO:";
         }
     }
 
+    private async Task<string> ExtractEstablishmentFromMessage(string userMessage)
+    {
+        try
+        {
+            var prompt = $@"Extraia o nome do estabelecimento/empresa desta reclamação.
+Se não encontrar, retorne ""não identificado"".
+
+MENSAGEM: ""{userMessage}""
+
+Responda APENAS com o nome do estabelecimento ou ""não identificado"".";
+
+            var result = await _kernel.InvokePromptAsync(prompt);
+            return result.ToString().Trim();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro ao extrair estabelecimento: {ex.Message}");
+            return "não identificado";
+        }
+    }
+
     private async Task<string> ExtractComplementText(string correction)
     {
         var prompt = $@"
@@ -314,7 +458,7 @@ INFORMAÇÃO COMPLEMENTAR:";
     // MÉTODOS AUXILIARES
     private string? ExtractMerchant(string text)
     {
-        var knownMerchants = new[] { "netflix", "amazon", "spotify", "uber", "ifood", "google", "apple", "microsoft", "zoom" };
+        var knownMerchants = new[] { "netflix", "amazon", "spotify", "uber", "ifood", "google", "apple", "microsoft", "zoom", "zoop" };
         var lowerText = text.ToLower();
         
         foreach (var merchant in knownMerchants)
@@ -325,9 +469,44 @@ INFORMAÇÃO COMPLEMENTAR:";
         return null;
     }
 
+    // Extrai o estabelecimento apenas uma vez usando padrões e heurísticas simples
+    private string? ExtractEstablishmentOnce(string userMessage)
+    {
+        if (string.IsNullOrWhiteSpace(userMessage)) return null;
+
+        // Se o texto já contém uma marcação explícita, usa ela
+        if (userMessage.Contains("| Estabelecimento:", StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = userMessage.Split("| Estabelecimento:", StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length > 1) return parts[1].Trim();
+        }
+
+        var lower = userMessage.ToLowerInvariant();
+        if (lower.Contains("zoop") || lower == "zoo") return "Zoop";
+        if (lower.Contains("netflix")) return "Netflix";
+        if (lower.Contains("spotify")) return "Spotify";
+        if (lower.Contains("amazon")) return "Amazon";
+
+        // tenta extrair merchant conhecido
+        var simple = ExtractMerchant(userMessage);
+        if (!string.IsNullOrWhiteSpace(simple))
+            return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(simple);
+
+        // se nada encontrado, retorna null para ser tratado pelo chamador
+        return null;
+    }
+
+    private bool ContainsOffensiveContent(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var offensiveWords = new[] { "porra", "caralho", "foda", "merda", "buceta", "cu", "puta", "viado", "corno" };
+        var lower = text.ToLowerInvariant();
+        return offensiveWords.Any(w => lower.Contains(w));
+    }
+
     private string UpdateMerchantInText(string original, string newMerchant)
     {
-        var knownMerchants = new[] { "netflix", "amazon", "spotify", "uber", "ifood", "google", "apple" };
+        var knownMerchants = new[] { "netflix", "amazon", "spotify", "uber", "ifood", "google", "apple", "zoop" };
         var lowerOriginal = original.ToLower();
         
         foreach (var merchant in knownMerchants)
