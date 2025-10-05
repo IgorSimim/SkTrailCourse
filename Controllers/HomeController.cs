@@ -92,6 +92,58 @@ public class HomeController : Controller
         return View();
     }
 
+    [HttpPost]
+    public Task<JsonResult> ProcessConfirmation([FromBody] ConfirmationInput input)
+    {
+        try
+        {
+            var response = new ChatResponse();
+
+            if (input == null || string.IsNullOrWhiteSpace(input.UserResponse) || string.IsNullOrWhiteSpace(input.Type))
+            {
+                response.Message = "❌ Confirmação inválida.";
+                return Task.FromResult(Json(response));
+            }
+
+            Console.WriteLine($"📥 Processando confirmação: Type={input.Type}, UserResponse={input.UserResponse}");
+
+            // Detectar se o usuário quer CONSULTA ou RECLAMAÇÃO com base em texto natural
+            var detected = DetectConfirmationIntent(input.UserResponse);
+
+            if (detected == ConfirmationDecision.Consult)
+            {
+                response.Message = "👤 Para consulta, preciso do seu CPF:";
+                response.RequiresCpfInput = true;
+                response.RequiresConfirmation = false;
+                response.ConfirmationType = input.Type;
+                return Task.FromResult(Json(response));
+            }
+
+            if (detected == ConfirmationDecision.Complaint)
+            {
+                response.Message = "📝 Entendi que você quer abrir uma reclamação. Por favor, descreva o problema com mais detalhes:";
+                response.RequiresConfirmation = false;
+                response.ConfirmationType = input.Type;
+                return Task.FromResult(Json(response));
+            }
+
+            // Se não detectou claramente, pede para o usuário responder com texto natural
+            response.Message = "🤔 Não consegui identificar claramente. Você prefere CONSULTAR seus boletos da Zoop ou ABRIR UMA RECLAMAÇÃO?";
+            response.RequiresConfirmation = true;
+            response.ConfirmationType = input.Type;
+            return Task.FromResult(Json(response));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro em ProcessConfirmation: {ex}");
+            var response = new ChatResponse
+            {
+                Message = $"\n❌ Ops! Algo deu errado ao processar a confirmação:\n   {ex.Message}\n"
+            };
+            return Task.FromResult(Json(response));
+        }
+    }
+
 [HttpPost]
 public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
 {
@@ -228,6 +280,52 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
             return Json(response);
         }
     }
+    
+    // Coloca o enum e a função de detecção dentro da classe para visibilidade correta
+    private enum ConfirmationDecision
+    {
+        Unknown = 0,
+        Consult = 1,
+        Complaint = 2
+    }
+
+    // Detecta se a resposta do usuário indica CONSULTA ou RECLAMAÇÃO
+    private ConfirmationDecision DetectConfirmationIntent(string userText)
+    {
+        if (string.IsNullOrWhiteSpace(userText)) return ConfirmationDecision.Unknown;
+
+        var lowered = userText.ToLowerInvariant();
+
+        var consultKeywords = new[] { "consult", "consultar", "ver", "verificar", "saber", "boletos", "cobrancas", "detalhes", "ver boletos", "ver cobranças" };
+        var complaintKeywords = new[] { "reclam", "reclamar", "problema", "indevida", "indevido", "errada", "abrir", "reclamação", "reclamacao", "cobrança indevida", "cobranca indevida" };
+
+        foreach (var kw in consultKeywords)
+        {
+            if (lowered.Contains(kw)) return ConfirmationDecision.Consult;
+        }
+
+        foreach (var kw in complaintKeywords)
+        {
+            if (lowered.Contains(kw)) return ConfirmationDecision.Complaint;
+        }
+
+        // Also check short natural forms
+        var consultShort = new[] { "consultar", "quero consultar", "ver", "ver boletos", "ver cobranças", "ver cobrancas", "gostaria de ver" };
+        var complaintShort = new[] { "reclamar", "abrir reclamação", "abrir reclamacao", "tenho um problema", "cobrança indevida", "cobranca indevida" };
+
+        foreach (var kw in consultShort)
+        {
+            if (lowered.Contains(kw)) return ConfirmationDecision.Consult;
+        }
+
+        foreach (var kw in complaintShort)
+        {
+            if (lowered.Contains(kw)) return ConfirmationDecision.Complaint;
+        }
+
+        return ConfirmationDecision.Unknown;
+    }
+
 }
 
 // Model classes
@@ -235,6 +333,12 @@ public class ChatInput
 {
     public string Command { get; set; } = string.Empty;
 }
+
+    public class ConfirmationInput
+    {
+        public string Type { get; set; } = string.Empty; // ex: "zoop_intent"
+        public string UserResponse { get; set; } = string.Empty; // texto natural do usuário
+    }
 
 public class NameInput
 {
@@ -252,4 +356,8 @@ public class ChatResponse
     public bool RequiresNameInput { get; set; }
     public bool RequiresCpfInput { get; set; }
     public bool IsExit { get; set; }
+    // Novas propriedades para confirmação
+    public bool RequiresConfirmation { get; set; }
+    public string? ConfirmationType { get; set; }
 }
+    

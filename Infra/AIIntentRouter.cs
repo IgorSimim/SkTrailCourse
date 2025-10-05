@@ -20,6 +20,39 @@ public class AIIntentRouter
 
         var args = new KernelArguments();
 
+        // Detect ambiguous Zoop contexts that require explicit user confirmation
+        try
+        {
+            var lowered = input.ToLowerInvariant();
+            // Ambiguous patterns where 'zoop' could mean consulta ou reclamação
+            var ambiguousPatterns = new[]
+            {
+                "cobrança zoop",
+                "cobranca zoop",
+                "zoop no meu boleto",
+                "zoop no extrato",
+                "tem uma zoop no meu boleto",
+                "zoop no boleto",
+                "cobrança da zoop",
+                "cobranca da zoop",
+                "problema com zoop"
+            };
+
+            foreach (var pat in ambiguousPatterns)
+            {
+                if (lowered.Contains(pat))
+                {
+                    args["confirmationType"] = "zoop_intent";
+                    Console.WriteLine("⚠️ Entrada ambígua detectada para Zoop - solicitando confirmação do usuário");
+                    return (null, null, args);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro ao detectar padrão ambíguo: {ex.Message}");
+        }
+
         try
         {
             var prompt = @$"
