@@ -157,6 +157,50 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
         state.AddToHistory(command, "user");
         UpdateConversationState(state);
 
+        // Deterministic fallback for essential commands (always handle these locally)
+        var normalized = command.ToLowerInvariant().Trim();
+        if (normalized == "listar reclamações" || normalized == "minhas reclamações" || normalized == "ver disputas" || normalized == "listar" )
+        {
+            var listResult = await _kernel.InvokeAsync("Disputes", "ListDisputes");
+            return Json(new ChatResponse { Message = "📋 " + listResult.ToString() });
+        }
+
+        if (normalized == "listar empresas" || normalized == "empresas cadastradas")
+        {
+            // If you re-enable company listing later, wire this to a plugin; for now return a placeholder
+            return Json(new ChatResponse { Message = "📋 Lista de empresas não está disponível no momento." });
+        }
+
+        if (normalized == "consultar boletos" || normalized == "ver boletos zoop" || normalized.StartsWith("consultar"))
+        {
+            // start the boleto consult flow
+            state.CurrentStep = "aguardando_cpf";
+            state.PreviousMessage = command;
+            UpdateConversationState(state);
+            return Json(new ChatResponse { RequiresCpfInput = true, Message = "👤 Para consultar boletos, por favor informe o CPF:" });
+        }
+
+        if (normalized.StartsWith("reclamar") || normalized.StartsWith("abrir reclama"))
+        {
+            // try to capture merchant if provided inline (e.g., 'reclamar da netflix')
+            state.CurrentStep = "aguardando_merchant";
+            state.PreviousMessage = command;
+            state.ExpectedResponseType = "merchant_required";
+            UpdateConversationState(state);
+            return Json(new ChatResponse { Message = "📝 Sobre qual estabelecimento você quer reclamar? Se já descreveu, apenas confirme." , RequiresConfirmation = true});
+        }
+
+        if (normalized == "sair" || normalized == "exit")
+        {
+            ResetConversationState();
+            return Json(new ChatResponse { Message = "👋 Encerrando ZoopIA. Até logo!", IsExit = true });
+        }
+
+        if (normalized == "ajuda" || normalized == "help")
+        {
+            return Json(new ChatResponse { Message = "💡 Exemplos: 'consultar boletos da Zoop', 'reclamar da Netflix', 'listar reclamações'" });
+        }
+
         // Tratamento rápido de finalização/agradecimento: encerra a conversa
         var lowerCmdQuick = command.ToLowerInvariant();
         if (lowerCmdQuick.Contains("obrigad") || lowerCmdQuick.Contains("valeu") || lowerCmdQuick.Contains("obg") || lowerCmdQuick.Contains("obrigada"))
@@ -200,7 +244,9 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
                     return Json(farewell);
                 }
 
-                var intent = await AnalyzeIntentAsync(command);
+                // First, run a fast deterministic intent detector that guarantees recognition of built-in commands
+                var intent = await AnalyzeUserIntent(command);
+                Console.WriteLine($"🤖 Intent (deterministic/AI): {intent}");
                 Console.WriteLine($"🤖 Intent (IA): {intent}");
 
                 switch (intent)
@@ -211,6 +257,35 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
                         state.LastUpdate = DateTime.UtcNow;
                         UpdateConversationState(state);
                         return Json(new ChatResponse { RequiresCpfInput = true, Message = "👤 Para consultar boletos da Zoop, preciso do seu CPF:" });
+
+                    // Deterministic/manual fallback cases
+                    case "listar_reclamacoes":
+                        var listResult = await _kernel.InvokeAsync("Disputes", "ListDisputes");
+                        return Json(new ChatResponse { Message = "📋 " + listResult.ToString() });
+
+                    case "listar_empresas":
+                        // Lista de empresas não disponível via plugin atualmente — retorna placeholder amigável
+                        return Json(new ChatResponse { Message = "📋 Lista de empresas não disponível no momento." });
+
+                    case "ajuda":
+                        return Json(new ChatResponse { Message = "📚 Exemplos: 'consultar boletos da Zoop', 'reclamar da Netflix', 'listar reclamações'" });
+
+                    case "consulta_clara":
+                        state.CurrentStep = "aguardando_cpf";
+                        state.PreviousMessage = command;
+                        state.LastUpdate = DateTime.UtcNow;
+                        UpdateConversationState(state);
+                        return Json(new ChatResponse { RequiresCpfInput = true, Message = "👤 Para consultar boletos, por favor informe o CPF:" });
+
+                    case "reclamacao_clara":
+                        // start flow to capture merchant or use inline merchant
+                        state.CurrentStep = "aguardando_merchant";
+                        state.PreviousMessage = command;
+                        state.ExpectedResponseType = "merchant_required";
+                        UpdateConversationState(state);
+                        return Json(new ChatResponse { Message = "📝 Sobre qual estabelecimento você quer reclamar? Se já descreveu, apenas confirme.", RequiresConfirmation = true });
+
+                    
 
                     case "reclamar_zoop":
                         // If the message is detailed (values, dates, boleto info), prefer asking CONSULTAR vs RECLAMAR
@@ -550,7 +625,7 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
     {
         if (string.IsNullOrWhiteSpace(userMessage)) return "outro";
 
-        var prompt = $"""
+    var prompt = $"""
 Você é um assistente que recebe mensagens de usuários sobre cobranças.
 Responda APENAS com UMA das labels abaixo (apenas a palavra):
 
@@ -560,6 +635,11 @@ Responda APENAS com UMA das labels abaixo (apenas a palavra):
 - finalizar            (usuário está se despedindo/ agradecendo)
 - ambiguidade_zoop     (mensagem menciona Zoop mas não fica claro: consultar ou reclamar)
 - outro                (qualquer outra intenção)
+
+EXEMPLOS:
+"consultar boletos da Zoop" => consultar_zoop
+"quero abrir reclamação da Netflix" => reclamar_outra
+"listar minhas reclamações" => outro
 
 Mensagem: "{userMessage}"
 """;
@@ -572,6 +652,66 @@ Mensagem: "{userMessage}"
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Erro em AnalyzeIntentAsync: {ex.Message}");
+            return "outro";
+        }
+    }
+
+    // Deterministic fallback intent analyzer that guarantees recognition of basic system commands
+    private async Task<string> AnalyzeUserIntent(string userMessage)
+    {
+        if (string.IsNullOrWhiteSpace(userMessage)) return "outro";
+        var lower = userMessage.ToLowerInvariant();
+
+        // PRIMEIRO: Fallback manual para comandos do sistema (prioritário)
+        if ((lower.Contains("listar") || lower.Contains("mostrar") || lower.Contains("ver")) &&
+            (lower.Contains("reclam") || lower.Contains("disput") || lower.Contains("ticket")))
+            return "listar_reclamacoes";
+
+        if ((lower.Contains("listar") || lower.Contains("mostrar") || lower.Contains("ver")) &&
+            (lower.Contains("empresa") || lower.Contains("estabelecimento")))
+            return "listar_empresas";
+
+        if (lower.Contains("consultar") || lower.Contains("ver boleto") || lower.Contains("ver boletos") || (lower.Contains("zoop") && lower.Contains("boleto")))
+            return "consulta_clara";
+
+        if (lower.Contains("reclamar") || lower.Contains("abrir reclama") || lower.Contains("problema com") || lower.Contains("indigna"))
+            return "reclamacao_clara";
+
+        if (lower.Contains("obrigad") || lower.Contains("tchau") || lower.Contains("sair") || lower.Contains("valeu"))
+            return "finalizacao";
+
+        if (lower.Contains("ajuda") || lower.Contains("como usar") || lower.Equals("oi"))
+            return "ajuda";
+
+        // DEPOIS: fallback para IA apenas para casos complexos
+        try
+        {
+            var prompt = $"""
+Analise se esta mensagem é sobre:
+- CONSULTAR boletos da Zoop
+- RECLAMAR de alguma empresa
+- LISTAR informações do sistema
+- FINALIZAR conversa
+- OUTRO assunto
+
+Mensagem: "{userMessage}"
+Responda apenas com uma palavra: consultar|reclamar|listar|finalizar|outro
+""";
+
+            var result = await _kernel.InvokePromptAsync(prompt);
+            var iaResult = result.ToString().Trim().ToLower();
+
+            return iaResult switch
+            {
+                "consultar" => "consulta_clara",
+                "reclamar" => "reclamacao_clara",
+                "listar" => "listar_reclamacoes",
+                "finalizar" => "finalizacao",
+                _ => "outro",
+            };
+        }
+        catch
+        {
             return "outro";
         }
     }
