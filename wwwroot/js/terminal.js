@@ -11,6 +11,25 @@ const elements = {
     loadingSpinner: document.getElementById('loadingSpinner')
 };
 
+// Defensive fixes: create or fallback elements so a missing DOM node doesn't break the flow
+if (!elements.outputText) {
+    // Try to attach an outputText div inside terminalOutput if possible
+    const out = document.createElement('div');
+    out.id = 'outputText';
+    if (elements.terminalOutput) {
+        elements.terminalOutput.appendChild(out);
+    } else {
+        // last resort: append to body
+        document.body.appendChild(out);
+    }
+    elements.outputText = out;
+}
+
+// Ensure cpf input is hidden initially (matches previous behavior)
+if (elements.cpfInput) {
+    elements.cpfInput.style.display = 'none';
+}
+
 // ========== INICIALIZAÇÃO ==========
 elements.commandInput.focus();
 
@@ -114,9 +133,9 @@ function clearTerminal() {
 
 // ========== FUNÇÕES AUXILIARES ==========
 function toggleLoading(isLoading) {
-    elements.sendText.classList.toggle('d-none', isLoading);
-    elements.loadingSpinner.classList.toggle('d-none', !isLoading);
-    elements.sendButton.disabled = isLoading;
+    if (elements.sendText) elements.sendText.classList.toggle('d-none', isLoading);
+    if (elements.loadingSpinner) elements.loadingSpinner.classList.toggle('d-none', !isLoading);
+    if (elements.sendButton) elements.sendButton.disabled = isLoading;
 }
 
 function applyMessageColors(message) {
@@ -139,7 +158,15 @@ function applyMessageColors(message) {
 function addToTerminal(html, scroll = false) {
     const div = document.createElement('div');
     div.innerHTML = html;
-    elements.outputText.appendChild(div);
+    // append to outputText if available, otherwise fallback to terminalOutput or body
+    const container = elements.outputText || elements.terminalOutput || document.body;
+    try {
+        container.appendChild(div);
+    } catch (err) {
+        // as a last resort, log to console so it doesn't break execution flow
+        console.error('Failed to append terminal output element:', err);
+        document.body.appendChild(div);
+    }
 
     if (scroll) {
         elements.terminalOutput.scrollTop = elements.terminalOutput.scrollHeight;
