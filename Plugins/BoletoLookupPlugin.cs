@@ -188,37 +188,7 @@ public class BoletoLookupPlugin
         return stringBuilder.ToString().Normalize(NormalizationForm.FormC);
     }
 
-    [KernelFunction, Description("Listar todas as empresas cadastradas")]
-    public async Task<string> ListCompanies()
-    {
-        try
-        {
-            if (!File.Exists(_dataFile))
-                return $"❌ Arquivo de dados não encontrado.";
-
-            var json = await File.ReadAllTextAsync(_dataFile);
-            
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
-            
-            var data = JsonSerializer.Deserialize<BoletoData>(json, options);
-
-            if (data?.Empresas == null || !data.Empresas.Any())
-                return "❌ Nenhuma empresa cadastrada";
-
-            var empresasFormatadas = data.Empresas.Select((e, index) => 
-                $"{index + 1}. {e.NomeFantasia} ({e.RazaoSocial})\n   📧 {e.ContatoEmail} | 📞 {e.Telefone}");
-
-            return "🏢 Empresas cadastradas:\n\n" + string.Join("\n\n", empresasFormatadas);
-        }
-        catch (Exception ex)
-        {
-            return $"❌ Erro ao listar empresas: {ex.Message}";
-        }
-    }
+    // Método ListCompanies removido - funcionalidade não necessária
 
     [KernelFunction, Description("Buscar boletos por CPF do cliente")]
     public async Task<string> SearchByCpf(

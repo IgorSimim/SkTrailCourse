@@ -3,6 +3,7 @@ using Microsoft.SemanticKernel;
 using SkTrailCourse.Infra;
 using SkTrailCourse.Plugins;
 using System.Text;
+using System.Text.Json;
 
 namespace ZoopSK.Controllers;
 
@@ -108,6 +109,8 @@ public class HomeController : Controller
             Console.WriteLine($"📥 Processando confirmação: Type={input.Type}, UserResponse={input.UserResponse}");
 
             // Detectar se o usuário quer CONSULTA ou RECLAMAÇÃO com base em texto natural
+            // Recupera contexto da sessão (ConversationState) para manter estado entre requisições
+            var state = GetConversationState();
             var detected = DetectConfirmationIntent(input.UserResponse);
 
             if (detected == ConfirmationDecision.Consult)
@@ -116,6 +119,11 @@ public class HomeController : Controller
                 response.RequiresCpfInput = true;
                 response.RequiresConfirmation = false;
                 response.ConfirmationType = input.Type;
+                // Atualiza estado na sessão
+                state.CurrentStep = "aguardando_cpf";
+                state.LastUpdate = DateTime.UtcNow;
+                state.ExpectedResponseType = input.Type;
+                UpdateConversationState(state);
                 return Task.FromResult(Json(response));
             }
 
@@ -124,6 +132,10 @@ public class HomeController : Controller
                 response.Message = "📝 Entendi que você quer abrir uma reclamação. Por favor, descreva o problema com mais detalhes:";
                 response.RequiresConfirmation = false;
                 response.ConfirmationType = input.Type;
+                state.CurrentStep = "aguardando_detalhes_reclamacao";
+                state.LastUpdate = DateTime.UtcNow;
+                state.ExpectedResponseType = input.Type;
+                UpdateConversationState(state);
                 return Task.FromResult(Json(response));
             }
 
@@ -131,6 +143,10 @@ public class HomeController : Controller
             response.Message = "🤔 Não consegui identificar claramente. Você prefere CONSULTAR seus boletos da Zoop ou ABRIR UMA RECLAMAÇÃO?";
             response.RequiresConfirmation = true;
             response.ConfirmationType = input.Type;
+            state.CurrentStep = "aguardando_confirmação_zoop";
+            state.LastUpdate = DateTime.UtcNow;
+            state.ExpectedResponseType = input.Type;
+            UpdateConversationState(state);
             return Task.FromResult(Json(response));
         }
         catch (Exception ex)
@@ -157,7 +173,8 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
             return Json(response);
         }
 
-        var command = input.Command.Trim();
+    var command = input.Command.Trim();
+    var state = GetConversationState();
         Console.WriteLine($"📥 Comando recebido: '{command}'");
 
         // Comando de saída
@@ -169,13 +186,7 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
             return Json(response);
         }
 
-        // Comando direto para listar empresas
-        if (command.Equals("listar empresas", StringComparison.OrdinalIgnoreCase))
-        {
-            var result = await _kernel.InvokeAsync("BoletoLookup", "ListCompanies");
-            response.Message = "🏢 " + result.ToString();
-            return Json(response);
-        }
+        // 'listar empresas' removido - funcionalidade não necessária
 
         // Comandos simples diretos (sem IA)
         if (command.Equals("listar reclamações", StringComparison.OrdinalIgnoreCase) ||
@@ -199,9 +210,33 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
             response.Message = "🤔 Não entendi. Tente:\n" +
                                "   • 'verifiquei uma compra no boleto' (para CONSULTAR origem)\n" +
                                "   • 'quero reclamar de uma cobrança' (para RECLAMAR)\n" +
-                               "   • 'listar reclamações'\n" +
-                               "   • 'listar empresas'";
+                               "   • 'listar reclamações'";
             return Json(response);
+        }
+
+        // Se estamos aguardando confirmação (por exemplo, zoop), tratar respostas curtas aqui
+        if (state.CurrentStep == "aguardando_confirmação_zoop")
+        {
+            var detected = DetectConfirmationIntent(command);
+            if (detected == ConfirmationDecision.Consult)
+            {
+                // transita para aguardando_cpf
+                state.CurrentStep = "aguardando_cpf";
+                state.LastUpdate = DateTime.UtcNow;
+                UpdateConversationState(state);
+                var resp = new ChatResponse { Message = "👤 Para consulta, preciso do seu CPF:", RequiresCpfInput = true };
+                return Json(resp);
+            }
+
+            if (detected == ConfirmationDecision.Complaint)
+            {
+                state.CurrentStep = "aguardando_detalhes_reclamacao";
+                state.LastUpdate = DateTime.UtcNow;
+                UpdateConversationState(state);
+                var resp = new ChatResponse { Message = "📝 Entendi que você quer abrir uma reclamação. Por favor, descreva o problema com mais detalhes:" };
+                return Json(resp);
+            }
+            // se não detectou, continua para análise normal
         }
 
         // Evita criação automática de disputa quando a entrada não parece ser uma reclamação clara
@@ -221,6 +256,11 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
             // Para consultas de boleto, pedimos CPF em vez do nome
             response.RequiresCpfInput = true;
             response.Message += "👤 Por favor, informe seu CPF (somente números ou formato padrão) para consulta:";
+            // atualiza estado da sessão para aguardando_cpf
+            state.CurrentStep = "aguardando_cpf";
+            state.PreviousMessage = command;
+            state.LastUpdate = DateTime.UtcNow;
+            UpdateConversationState(state);
             return Json(response);
         }
 
@@ -262,6 +302,15 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
             {
                 response.Message = "❌ CPF não informado.";
                 return Json(response);
+            }
+
+            // Se houver um estado de conversa na sessão, limpar estado ou anotar a busca
+            var state = GetConversationState();
+            if (state != null)
+            {
+                state.CurrentStep = "normal";
+                state.LastUpdate = DateTime.UtcNow;
+                UpdateConversationState(state);
             }
 
             response.Message += $"🔍 Consultando boletos para o CPF: {input.CustomerCpf}...\n";
@@ -324,6 +373,77 @@ public async Task<JsonResult> ProcessCommand([FromBody] ChatInput input)
         }
 
         return ConfirmationDecision.Unknown;
+    }
+
+    // Obtém ou cria um session id baseado em cookie ou header
+    private string GetSessionIdFromRequest()
+    {
+        try
+        {
+            // 1) tenta header X-Session-Id
+            if (Request.Headers.TryGetValue("X-Session-Id", out var headerVal) && !string.IsNullOrWhiteSpace(headerVal))
+            {
+                return headerVal.ToString();
+            }
+
+            // 2) tenta cookie
+            if (Request.Cookies.TryGetValue("sessionId", out var cookieVal) && !string.IsNullOrWhiteSpace(cookieVal))
+            {
+                return cookieVal;
+            }
+
+            // 3) cria novo session id e envia cookie
+            var newId = Guid.NewGuid().ToString();
+            Response.Cookies.Append("sessionId", newId, new Microsoft.AspNetCore.Http.CookieOptions { HttpOnly = true, Expires = DateTimeOffset.UtcNow.AddHours(2) });
+            return newId;
+        }
+        catch
+        {
+            return Guid.NewGuid().ToString();
+        }
+    }
+
+    // ConversationState stored in ASP.NET Session
+    public class ConversationState
+    {
+        public string CurrentStep { get; set; } = "normal";
+        public string PreviousMessage { get; set; } = string.Empty;
+        public string ExpectedResponseType { get; set; } = string.Empty;
+        public DateTime LastUpdate { get; set; } = DateTime.UtcNow;
+    }
+
+    private ConversationState GetConversationState()
+    {
+        var sessionKey = "ConversationState";
+        try
+        {
+            var json = HttpContext.Session.GetString(sessionKey);
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                return JsonSerializer.Deserialize<ConversationState>(json) ?? new ConversationState();
+            }
+            var newState = new ConversationState();
+            HttpContext.Session.SetString(sessionKey, JsonSerializer.Serialize(newState));
+            return newState;
+        }
+        catch
+        {
+            var fallback = new ConversationState();
+            HttpContext.Session.SetString(sessionKey, JsonSerializer.Serialize(fallback));
+            return fallback;
+        }
+    }
+
+    private void UpdateConversationState(ConversationState state)
+    {
+        var sessionKey = "ConversationState";
+        state.LastUpdate = DateTime.UtcNow;
+        HttpContext.Session.SetString(sessionKey, JsonSerializer.Serialize(state));
+    }
+
+    private void ResetConversationState()
+    {
+        HttpContext.Session.Remove("ConversationState");
     }
 
 }

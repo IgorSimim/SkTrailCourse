@@ -36,4 +36,33 @@ public class JsonMemoryStore
         var json = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
         await File.WriteAllTextAsync(filePath, json);
     }
+
+    // Conversation context helpers
+    public async Task<ConversationContext?> GetContextAsync(string sessionId)
+    {
+        var list = await LoadListAsync<ConversationContext>("conversation_contexts");
+        return list.FirstOrDefault(c => c.SessionId == sessionId);
+    }
+
+    public async Task SaveContextAsync(ConversationContext context)
+    {
+        var list = await LoadListAsync<ConversationContext>("conversation_contexts");
+        var existing = list.FirstOrDefault(c => c.SessionId == context.SessionId);
+        if (existing != null)
+        {
+            list.Remove(existing);
+        }
+        list.Add(context);
+        await SaveListAsync("conversation_contexts", list);
+    }
+}
+
+// ConversationContext model
+public class ConversationContext
+{
+    public string SessionId { get; set; } = Guid.NewGuid().ToString();
+    public string CurrentState { get; set; } = "normal";
+    public string PreviousMessage { get; set; } = string.Empty;
+    public string ConfirmationType { get; set; } = string.Empty;
+    public DateTime LastActivity { get; set; } = DateTime.UtcNow;
 }
