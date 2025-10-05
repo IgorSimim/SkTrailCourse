@@ -824,7 +824,8 @@ O usuário respondeu: "{userText}"\n\nClassifique como apenas uma das opções: 
     private bool ContainsOffensiveContent(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
-        var offensiveWords = new[] { "porra", "caralho", "foda", "merda", "buceta", "cu", "puta", "viado", "corno" };
+        // Palavras ofensivas removidas a pedido do usuário. A função permanece para reativação futura.
+        var offensiveWords = new string[] { };
         var lower = text.ToLowerInvariant();
         return offensiveWords.Any(w => lower.Contains(w));
     }

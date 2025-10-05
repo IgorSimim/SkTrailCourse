@@ -498,8 +498,10 @@ INFORMAÇÃO COMPLEMENTAR:";
 
     private bool ContainsOffensiveContent(string? text)
     {
+        // Palavras potencialmente ofensivas removidas a pedido do usuário.
+        // Mantemos a função para fácil reativação futura, retornando false enquanto a lista estiver vazia.
         if (string.IsNullOrWhiteSpace(text)) return false;
-        var offensiveWords = new[] { "porra", "caralho", "foda", "merda", "buceta", "cu", "puta", "viado", "corno" };
+        var offensiveWords = new string[] { };
         var lower = text.ToLowerInvariant();
         return offensiveWords.Any(w => lower.Contains(w));
     }
