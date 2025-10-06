@@ -4,11 +4,16 @@ Sistema avançado de análise automática de cobranças e disputas construído c
 
 O sistema processa reclamações de clientes em linguagem natural, consulta boletos em tempo real, e toma decisões automatizadas baseadas em políticas de negócio da Zoop.
 
+---
+
 ## 🌐 Interface Web Moderna
 
 **Funcionalidade principal!** O ZoopIA possui uma interface web completa e intuitiva:
 
 - **Terminal interativo** com design moderno inspirado no tema Zoop
+- **Paleta de cores padronizada** (laranja #FF5C00 e rosa #FF2D92)
+- **Tipografia consistente** com escala de tamanhos definida
+- **CSS organizado** com variáveis CSS para fácil manutenção
 - **Chat em tempo real** para interação natural com a IA
 - **Consulta de boletos** com entrada de CPF integrada e automática
 - **Sistema de cores inteligente** que se adapta ao tipo de resposta (sucesso, erro, aviso, info)
@@ -22,18 +27,23 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 
 ### 🌐 Interface Web Completa
 - **Terminal web interativo** com design moderno e responsivo
+- **Paleta de cores unificada** usando variáveis CSS (--color-primary, --color-secondary)
+- **Tipografia padronizada** (--font-size-xs, --font-size-sm, --font-size-base, --font-size-lg)
 - **Chat em tempo real** para comunicação natural com a IA
 - **Entrada de CPF automática** para consultas de boletos (detecta quando necessário)
 - **Sistema de cores inteligente** (sucesso ✅, erro ❌, aviso ⚠️, informação 🔍)
 - **Modal de ajuda** com comandos e exemplos práticos
 - **Controles de terminal** (limpar ⟳, ajuda i) no header
 - **Loading states** e feedback visual durante processamento
+- **Scrollbar customizada** com gradiente Zoop
 
 ### 🧠 Análise Inteligente com IA
 - **Processamento de linguagem natural** para entender reclamações e consultas
 - **Roteamento inteligente** via AIIntentRouter que distingue entre consultas e reclamações
 - **Extração automática** de valores, datas e estabelecimentos das reclamações
 - **Orquestração completa** do fluxo de análise com DisputeOrchestrator
+- **Detecção de ambiguidade** para contextos Zoop (consultar vs reclamar)
+- **Análise de intenção** com fallback determinístico para comandos do sistema
 
 ### 🔍 Consulta de Boletos
 - **Sistema completo de lookup** de boletos por CPF do cliente
@@ -54,6 +64,7 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 - **Persistência em JSON** (pasta `data/`)
 - **Interface web e CLI** com comandos intuitivos
 - **Histórico completo** de ações e status
+- **Estado de conversa** mantido via ASP.NET Session
 
 ---
 
@@ -65,16 +76,16 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
  │    └── HomeController.cs      # Controller MVC com APIs ProcessCommand e SearchBoletos
  ├── Views/
  │    └── Home/
- │         └── Index.cshtml      # Interface web principal com terminal interativo
+ │         └── Index.cshtml      # Interface web com terminal interativo (CSS refatorado)
  ├── wwwroot/
  │    ├── css/
- │    │    └── style.css         # Estilos modernos com tema Zoop
+ │    │    └── style.css         # Estilos legados
  │    ├── img/
  │    │    ├── logo-zoop.webp    # Logo da Zoop
  │    │    └── logo.png          # Logo alternativo
  │    └── js/
  │         ├── chat.js           # JavaScript legado
- │         └── terminal.js       # JavaScript principal do terminal interativo
+ │         └── terminal.js       # JavaScript legado
  ├── Infra/
  │    ├── AIIntentRouter.cs      # Roteamento inteligente de comandos
  │    └── JsonMemoryStore.cs     # Persistência local em JSON
@@ -203,10 +214,11 @@ Texto: Não reconheço a cobrança de 39,90 da Netflix
 - Analisa a entrada do usuário com IA
 - Distingue entre **consultas** (BoletoLookup) e **reclamações** (Disputes)
 - Extrai parâmetros automaticamente
+- Detecta ambiguidade em contextos Zoop
 - Fallback para reclamação em caso de dúvida
 
 ### 2. **Processamento de Consultas (BoletoLookupPlugin)**
-- Busca flexível por nome do cliente
+- Busca flexível por CPF do cliente
 - Remoção de acentos e correspondência parcial
 - Identificação de Zoop como intermediária
 - Dados completos da empresa emissora
@@ -221,6 +233,37 @@ Texto: Não reconheço a cobrança de 39,90 da Netflix
 - **R$ 50,01 - R$ 200,00**: Análise manual em 24h
 - **Acima de R$ 200,00**: Análise manual em 72h
 - **Baixa confiança**: Sempre para análise manual
+
+---
+
+## 🎨 Design System
+
+### Paleta de Cores
+```css
+--color-primary: #FF5C00      /* Laranja Zoop */
+--color-secondary: #FF2D92    /* Rosa Zoop */
+--color-success: #00e676      /* Verde */
+--color-error: #FF2D92        /* Rosa (erro) */
+--color-warning: #FF5C00      /* Laranja (aviso) */
+```
+
+### Tipografia
+```css
+--font-size-xs: 0.9rem        /* Textos pequenos */
+--font-size-sm: 1rem          /* Textos padrão */
+--font-size-base: 1rem        /* Base */
+--font-size-lg: 1.6rem        /* Títulos */
+--font-size-terminal: 15px    /* Terminal */
+```
+
+### Espaçamentos
+```css
+--spacing-xs: 6px
+--spacing-sm: 10px
+--spacing-md: 15px
+--spacing-lg: 20px
+--spacing-xl: 25px
+```
 
 ---
 
@@ -261,8 +304,8 @@ Texto: Não reconheço a cobrança de 39,90 da Netflix
 
 ### Frontend
 - **Bootstrap 5.3.0** - Framework CSS responsivo
-- **JavaScript Vanilla** - Interatividade do terminal web (terminal.js)
-- **CSS3 com Variáveis CSS** - Design moderno com tema Zoop
+- **JavaScript Vanilla** - Interatividade do terminal web
+- **CSS3 com Variáveis CSS** - Design moderno com tema Zoop padronizado
 - **Responsive Design** - Compatível com desktop e mobile
 - **Modal Components** - Interface de ajuda integrada
 
@@ -292,6 +335,7 @@ dotnet test --verbosity normal
 ### 🌐 Interface e Integração
 - ✅ **Interface Web** completa e responsiva (implementada!)
 - ✅ **APIs REST** para ProcessCommand e SearchBoletos (implementadas!)
+- ✅ **Design System** padronizado com variáveis CSS (implementado!)
 - **Webhooks** para notificações em tempo real
 - **PWA (Progressive Web App)** para uso offline
 - **API de consulta direta** por CPF
