@@ -133,6 +133,6 @@ app.MapControllerRoute(
 
 // Mensagem de inicialização
 Console.WriteLine("🚀 ZoopIA Web iniciado!");
-Console.WriteLine("📱 Acesse: https://localhost:5000");
+Console.WriteLine("📱 Acesse: http://localhost:5000");
 Console.WriteLine("🔐 Sessão configurada com sucesso!");
 app.Run();
