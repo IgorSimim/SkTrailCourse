@@ -138,53 +138,57 @@ public class DisputePlugin
         }
     }
 
-    [KernelFunction, Description("Editar uma reclamação existente")]
-    public async Task<string> EditDispute(
-        [Description("ID da reclamação")] string id,
-        [Description("Texto de correção ou atualização")] string correctionText)
+[KernelFunction, Description("Editar uma reclamação existente")]
+public async Task<string> EditDispute(
+    [Description("ID da reclamação")] string id,
+    [Description("Texto de correção ou atualização")] string correctionText)
+{
+    try
     {
-        try
-        {
-            var list = await _store.LoadListAsync<DisputeItem>(Key);
-            var dispute = list.FirstOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
-            
-            if (dispute == null)
-                return $"❌ Reclamação {id} não encontrada.";
+        var list = await _store.LoadListAsync<DisputeItem>(Key);
+        var dispute = list.FirstOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        
+        if (dispute == null)
+            return $"❌ Reclamação {id} não encontrada.";
 
-            Console.WriteLine($"🔍 Editando reclamação {id}");
-            Console.WriteLine($"📝 Original: {dispute.CustomerText}");
-            Console.WriteLine($"🔧 Correção: {correctionText}");
+        Console.WriteLine($"🔍 Editando reclamação {id}");
+        Console.WriteLine($"📝 Original: {dispute.CustomerText}");
+        Console.WriteLine($"🔧 Correção: {correctionText}");
 
-            var updatedText = await PreserveContextUpdate(dispute.CustomerText, correctionText);
-            var orchestratorResult = await _orchestrator.HandleAsync(updatedText, isEdit: true);
-            
-            var updatedMerchant = PreserveKnownMerchant(dispute.Merchant, ExtractEstablishmentOnce(updatedText));
-            var updatedAmountCents = orchestratorResult.AmountCents ?? dispute.AmountCents;
-            var updatedActionTaken = UpdateActionWithNewValues(dispute.ActionTaken, updatedMerchant, updatedAmountCents);
+        var updatedText = await PreserveContextUpdate(dispute.CustomerText, correctionText);
+        var orchestratorResult = await _orchestrator.HandleAsync(updatedText, isEdit: true);
+        
+        // 🔧 CORREÇÃO: Extrair valor da correção também
+        var correctionValue = ExtractValue(correctionText);
+        var updatedAmountCents = correctionValue ?? orchestratorResult.AmountCents ?? dispute.AmountCents;
+        
+        var updatedMerchant = PreserveKnownMerchant(dispute.Merchant, ExtractEstablishmentOnce(updatedText));
+        var updatedActionTaken = UpdateActionWithNewValues(dispute.ActionTaken, updatedMerchant, updatedAmountCents);
 
-            var updatedDispute = dispute with { 
-                CustomerText = updatedText,
-                Merchant = updatedMerchant,
-                AmountCents = updatedAmountCents,
-                Status = "Atualizada",
-                ActionTaken = updatedActionTaken
-            };
+        var updatedDispute = dispute with { 
+            CustomerText = updatedText,
+            Merchant = updatedMerchant,
+            AmountCents = updatedAmountCents,
+            Status = "Atualizada",
+            ActionTaken = updatedActionTaken
+        };
 
-            list[list.IndexOf(dispute)] = updatedDispute;
-            await _store.SaveListAsync(Key, list);
+        list[list.IndexOf(dispute)] = updatedDispute;
+        await _store.SaveListAsync(Key, list);
 
-            return $@"✏️ Reclamação {id} atualizada com sucesso!
+        return $@"✏️ Reclamação {id} atualizada com sucesso!
 
 📝 Nova descrição: {updatedText}
 🏢 Estabelecimento: {updatedMerchant}
+💰 Valor: {(updatedAmountCents.HasValue ? $"R$ {updatedAmountCents.Value / 100.0:F2}" : "Não identificado")}
 🤖 Ação atualizada: {updatedActionTaken}";
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Erro em EditDispute: {ex.Message}");
-            return $"❌ Erro ao editar reclamação: {ex.Message}";
-        }
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Erro em EditDispute: {ex.Message}");
+        return $"❌ Erro ao editar reclamação: {ex.Message}";
+    }
+}
 
     [KernelFunction, Description("Excluir uma reclamação")]
     public async Task<string> DeleteDispute([Description("ID da reclamação")] string id)
@@ -481,18 +485,43 @@ INFORMAÇÃO COMPLEMENTAR:";
                Regex.IsMatch(text.ToLower(), @"\d+\s*(reais|r\$|pila)");
     }
 
-    private int? ExtractValue(string text)
+   private int? ExtractValue(string text)
+{
+    try
     {
-        var match = Regex.Match(text.ToLower(), @"r\$\s*(\d+)[,.]?(\d{2})?");
-        if (match.Success)
+        // 🔧 MELHORIA: Mais padrões para capturar valores
+        var patterns = new[]
         {
-            var main = match.Groups[1].Value;
-            var cents = match.Groups[2].Success ? match.Groups[2].Value : "00";
-            if (int.TryParse(main + cents, out int value))
-                return value;
+            @"r\$\s*(\d+)[,.]?(\d{2})?", // R$ 550,00 ou R$550.00
+            @"(\d+)[,.]?(\d{2})?\s*reais", // 550 reais ou 550,00 reais
+            @"valor.*?(\d+)[,.]?(\d{2})?", // valor de 550,00
+            @"cobrança.*?(\d+)[,.]?(\d{2})?" // cobrança de 550
+        };
+        
+        foreach (var pattern in patterns)
+        {
+            var match = Regex.Match(text.ToLower(), pattern);
+            if (match.Success)
+            {
+                var main = match.Groups[1].Value;
+                var cents = match.Groups[2].Success ? match.Groups[2].Value : "00";
+                
+                if (int.TryParse(main + cents, out int value))
+                {
+                    Console.WriteLine($"🔍 Valor extraído: {value} do padrão: {pattern}");
+                    return value;
+                }
+            }
         }
+        
         return null;
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Erro ao extrair valor: {ex.Message}");
+        return null;
+    }
+}
 
     private string PreserveKnownMerchant(string originalMerchant, string? newMerchant)
     {
@@ -507,22 +536,52 @@ INFORMAÇÃO COMPLEMENTAR:";
         return newMerchant ?? originalMerchant;
     }
 
-    private string UpdateActionWithNewValues(string originalAction, string merchant, int? amountCents)
+   private string UpdateActionWithNewValues(string originalAction, string merchant, int? amountCents)
+{
+    if (!amountCents.HasValue) 
+        return originalAction;
+    
+    var newAmount = $"R$ {amountCents.Value / 100.0:F2}";
+    
+    // 🔧 CORREÇÃO: Atualiza o valor de forma mais robusta
+    var updated = originalAction;
+    
+    // Tenta encontrar e substituir qualquer padrão de valor
+    if (Regex.IsMatch(updated, @"R\$\s*\d+[,.]?\d*"))
     {
-        if (!amountCents.HasValue) 
-            return originalAction;
-        
-        var newAmount = $"R$ {amountCents.Value / 100.0:F2}";
-        var updated = Regex.Replace(originalAction, @"R\$\s*\d+[,.]?\d*", newAmount);
-        
-        if (!string.IsNullOrEmpty(merchant) && !merchant.Equals("desconhecido", StringComparison.OrdinalIgnoreCase))
-        {
-            updated = Regex.Replace(updated, @"(\w+)\s*-\s*R\$\s*\d+[,.]?\d*", $"{merchant} - {newAmount}");
-        }
-        
-        return updated;
+        // Substitui o valor existente
+        updated = Regex.Replace(updated, @"R\$\s*\d+[,.]?\d*", newAmount);
     }
-
+    else if (Regex.IsMatch(updated, @"\d+[,.]?\d*\s*reais", RegexOptions.IgnoreCase))
+    {
+        // Substitui formato "550 reais"
+        updated = Regex.Replace(updated, @"\d+[,.]?\d*\s*reais", $"{newAmount} reais", RegexOptions.IgnoreCase);
+    }
+    else
+    {
+        // Se não encontrou padrão, adiciona o valor no final
+        updated = $"{originalAction} - {newAmount}";
+    }
+    
+    // 🔧 CORREÇÃO: Atualiza o merchant se estiver específico
+    if (!string.IsNullOrEmpty(merchant) && !merchant.Equals("desconhecido", StringComparison.OrdinalIgnoreCase))
+    {
+        // Remove o merchant antigo se existir
+        var merchantPattern = @"([A-Za-z]+)\s*-\s*R\$\s*\d+[,.]?\d*";
+        if (Regex.IsMatch(updated, merchantPattern))
+        {
+            updated = Regex.Replace(updated, merchantPattern, $"{merchant} - {newAmount}");
+        }
+        else
+        {
+            // Adiciona o merchant se não existir
+            updated = $"{merchant} - {newAmount}";
+        }
+    }
+    
+    Console.WriteLine($"🔧 Ação atualizada: {updated}");
+    return updated;
+}
     private string TruncateText(string text, int maxLength)
     {
         if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
