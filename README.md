@@ -38,12 +38,15 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 - **Scrollbar customizada** com gradiente Zoop
 
 ### 🧠 Análise Inteligente com IA
+- **Sistema de retry automático** com tratamento de falhas transientes
+- **Recuperação inteligente** de erros de rede e rate limiting
 - **Processamento de linguagem natural** para entender reclamações e consultas
 - **Roteamento inteligente** via AIIntentRouter que distingue entre consultas e reclamações
 - **Extração automática** de valores, datas e estabelecimentos das reclamações
 - **Orquestração completa** do fluxo de análise com DisputeOrchestrator
 - **Detecção de ambiguidade** para contextos Zoop (consultar vs reclamar)
 - **Análise de intenção** com fallback determinístico para comandos do sistema
+- **Sistema de retry automático** com KernelRetryExtensions para maior confiabilidade
 
 ### 🔍 Consulta de Boletos
 - **Sistema completo de lookup** de boletos por CPF do cliente
@@ -88,7 +91,8 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
  │         └── terminal.js       # JavaScript legado
  ├── Infra/
  │    ├── AIIntentRouter.cs      # Roteamento inteligente de comandos
- │    └── JsonMemoryStore.cs     # Persistência local em JSON
+ │    ├── JsonMemoryStore.cs     # Persistência local em JSON
+ │    └── KernelRetryExtensions.cs # Sistema de retry para chamadas de IA
  ├── Plugins/
  │    ├── DisputePlugin.cs       # CRUD completo de disputas
  │    ├── DisputeOrchestrator.cs # Orquestração e políticas de negócio
@@ -96,8 +100,9 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
  │    └── SupportPlugin.cs       # Políticas e relatórios de suporte
  ├── SkTrailCourse.Tests/        # Testes unitários
  ├── data/
- │    ├── disputes.json          # Armazenamento de disputas (criado automaticamente)
+ │    ├── disputes.json          # Armazenamento de disputas
  │    └── boletos.json          # Base de boletos e empresas
+├── data-protection-keys/       # Chaves de proteção de dados ASP.NET
  ├── Program.cs                  # Aplicação web ASP.NET Core
  ├── SkTrailCourse.csproj        # Configuração do projeto
  └── .env                        # Configurações da API Gemini (criar manualmente)
@@ -113,12 +118,14 @@ O sistema processa reclamações de clientes em linguagem natural, consulta bole
 
 ### 2. Configurar arquivo `.env`
 
-Crie o arquivo `.env` na raiz do projeto:
+**Arquivo `.env` já existe no projeto** com as configurações:
 
 ```env
 GOOGLE_API_KEY=sua_chave_do_google_ai_studio
-AI_MODEL_ID=gemini-2.0-flash-exp
+AI_MODEL_ID=gemini-2.5-flash
 ```
+
+**Nota:** Substitua `sua_chave_do_google_ai_studio` pela sua chave real do Google AI Studio.
 
 ### 3. Executar o sistema
 
@@ -128,7 +135,7 @@ dotnet restore
 dotnet run
 ```
 
-**Acesse a interface web em:** `https://localhost:5000` (HTTPS) ou `http://localhost:5000` (HTTP)
+**Acesse a interface web em:** `http://localhost:5000` (HTTPS) ou `http://localhost:5000` (HTTP)
 
 ### 4. Executar testes
 
@@ -145,7 +152,7 @@ dotnet test
 
 A interface web oferece uma experiência moderna e intuitiva:
 
-1. **Acesse** `https://localhost:5000` após executar o projeto
+1. **Acesse** `http://localhost:5000` após executar o projeto
 2. **Digite comandos** no terminal interativo
 3. **Use o botão de ajuda** (i) para ver todos os comandos disponíveis
 4. **Use o botão limpar** (⟳) para limpar o terminal
@@ -341,9 +348,11 @@ dotnet test --verbosity normal
 - **API de consulta direta** por CPF
 
 ### 🔒 Segurança e Autenticação
-- **Autenticação JWT** para usuários
-- **Autorização baseada em roles**
-- **Auditoria completa** de ações
+- **Proteção de dados** ASP.NET Core integrada
+- **Chaves de criptografia** gerenciadas automaticamente
+- **Autenticação JWT** para usuários (planejado)
+- **Autorização baseada em roles** (planejado)
+- **Auditoria completa** de ações (planejado)
 
 ### 📊 Analytics e Monitoramento
 - **Dashboard** de métricas e KPIs
@@ -357,10 +366,11 @@ dotnet test --verbosity normal
 - **CI/CD** com GitHub Actions
 
 ### 🤖 IA Avançada
-- **Análise de sentimento** nas reclamações
-- **Detecção de fraude** com ML
-- **Classificação automática** de tipos de disputa
-- **Sugestões proativas** de resolução
+- ✅ **Sistema de retry** para maior confiabilidade das chamadas de IA
+- **Análise de sentimento** nas reclamações (planejado)
+- **Detecção de fraude** com ML (planejado)
+- **Classificação automática** de tipos de disputa (planejado)
+- **Sugestões proativas** de resolução (planejado)
 
 ---
 
