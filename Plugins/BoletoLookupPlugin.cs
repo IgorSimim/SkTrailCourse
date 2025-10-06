@@ -18,16 +18,16 @@ public class BoletoLookupPlugin
         [property: JsonPropertyName("telefone")] string Telefone
     );
 
-  public record Boleto(
-    [property: JsonPropertyName("boleto_id")] string BoletoId,
-    [property: JsonPropertyName("emissor_id")] string EmissorId,
-    [property: JsonPropertyName("valor")] decimal Valor,
-    [property: JsonPropertyName("vencimento")] string Vencimento,
-    [property: JsonPropertyName("pagavel_para")] string PagavelPara,
-    [property: JsonPropertyName("documento_pagavel")] string DocumentoPagavel,
-    [property: JsonPropertyName("status")] string Status,
-    [property: JsonPropertyName("descricao")] string Descricao  // ← NOVO CAMPO
-);
+    public record Boleto(
+      [property: JsonPropertyName("boleto_id")] string BoletoId,
+      [property: JsonPropertyName("emissor_id")] string EmissorId,
+      [property: JsonPropertyName("valor")] decimal Valor,
+      [property: JsonPropertyName("vencimento")] string Vencimento,
+      [property: JsonPropertyName("pagavel_para")] string PagavelPara,
+      [property: JsonPropertyName("documento_pagavel")] string DocumentoPagavel,
+      [property: JsonPropertyName("status")] string Status,
+      [property: JsonPropertyName("descricao")] string Descricao  // ← NOVO CAMPO
+  );
 
     public record BoletoData(
         [property: JsonPropertyName("empresas")] List<Empresa> Empresas,
@@ -76,7 +76,7 @@ public class BoletoLookupPlugin
                 var boletosFlexiveis = data.Boletos
                     .Where(b => ContainsFlexibleName(b.PagavelPara, nomeCliente))
                     .ToList();
-                    
+
                 if (boletosFlexiveis.Any())
                 {
                     boletosCliente = boletosFlexiveis;
@@ -87,33 +87,33 @@ public class BoletoLookupPlugin
                 return $"❌ Nenhum boleto encontrado para '{nomeCliente}'.";
 
             var resultados = new List<string>();
-            
-        foreach (var boleto in boletosCliente)
-        {
-            var empresa = data.Empresas.FirstOrDefault(e => e.Id == boleto.EmissorId);
-            var nomeEmpresa = empresa?.NomeFantasia ?? "Empresa não encontrada";
-            var contato = empresa?.ContatoEmail ?? "Contato não disponível";
 
-            var descricaoFormatada = !string.IsNullOrEmpty(boleto.Descricao) 
-                ? $"\n   📝 Descrição: {boleto.Descricao}" 
-                : "";
+            foreach (var boleto in boletosCliente)
+            {
+                var empresa = data.Empresas.FirstOrDefault(e => e.Id == boleto.EmissorId);
+                var nomeEmpresa = empresa?.NomeFantasia ?? "Empresa não encontrada";
+                var contato = empresa?.ContatoEmail ?? "Contato não disponível";
 
-            // Detecta se a Zoop é intermediária
-            var isIntermediaria = nomeEmpresa.Contains("Zoop") && 
-                                !string.IsNullOrEmpty(boleto.Descricao) &&
-                                boleto.Descricao.Length > 10;
+                var descricaoFormatada = !string.IsNullOrEmpty(boleto.Descricao)
+                    ? $"\n   📝 Descrição: {boleto.Descricao}"
+                    : "";
 
-            var avisoIntermediaria = isIntermediaria 
-                ? $"\n   💡 A Zoop é a plataforma de pagamentos. O estabelecimento real é mencionado na descrição acima."
-                : "";
+                // Detecta se a Zoop é intermediária
+                var isIntermediaria = nomeEmpresa.Contains("Zoop") &&
+                                    !string.IsNullOrEmpty(boleto.Descricao) &&
+                                    boleto.Descricao.Length > 10;
 
-            resultados.Add(
-                $"📄 Boleto {boleto.BoletoId} - R$ {boleto.Valor:F2} (vencimento {boleto.Vencimento})\n" +
-                $"   Emitido por: {nomeEmpresa}\n" +
-                $"   Contato: {contato}\n" +
-                $"   Status: {boleto.Status}{descricaoFormatada}{avisoIntermediaria}"
-            );
-        }
+                var avisoIntermediaria = isIntermediaria
+                    ? $"\n   💡 A Zoop é a plataforma de pagamentos. O estabelecimento real é mencionado na descrição acima."
+                    : "";
+
+                resultados.Add(
+                    $"📄 Boleto {boleto.BoletoId} - R$ {boleto.Valor:F2} (vencimento {boleto.Vencimento})\n" +
+                    $"   Emitido por: {nomeEmpresa}\n" +
+                    $"   Contato: {contato}\n" +
+                    $"   Status: {boleto.Status}{descricaoFormatada}{avisoIntermediaria}"
+                );
+            }
 
             return $"✅ Encontramos {boletosCliente.Count} boleto(s) para '{nomeCliente}':\n\n" +
                    string.Join("\n\n", resultados);
@@ -142,8 +142,8 @@ public class BoletoLookupPlugin
         var searchParts = searchClean.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
         // Verifica se todas as partes do nome de busca estão no nome alvo
-        return searchParts.All(searchPart => 
-            targetParts.Any(targetPart => 
+        return searchParts.All(searchPart =>
+            targetParts.Any(targetPart =>
                 targetPart.Contains(searchPart)));
     }
 
@@ -162,7 +162,7 @@ public class BoletoLookupPlugin
 
         // Pelo menos 2 partes devem coincidir (ou todas se houver menos de 3)
         var minMatches = searchParts.Length >= 3 ? 2 : searchParts.Length;
-        var matches = searchParts.Count(searchPart => 
+        var matches = searchParts.Count(searchPart =>
             targetParts.Any(targetPart => targetPart.Contains(searchPart)));
 
         return matches >= minMatches;
@@ -187,9 +187,7 @@ public class BoletoLookupPlugin
 
         return stringBuilder.ToString().Normalize(NormalizationForm.FormC);
     }
-
-    // Método ListCompanies removido - funcionalidade não necessária
-
+    
     [KernelFunction, Description("Buscar boletos por CPF do cliente")]
     public async Task<string> SearchByCpf(
         [Description("CPF do cliente para buscar boletos")] string cpf)

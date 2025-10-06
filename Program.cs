@@ -68,7 +68,7 @@ builder.Services.AddSingleton(orchestrator);
 builder.Services.AddSingleton(disputes);
 builder.Services.AddSingleton(boletoLookup);
 builder.Services.AddSingleton(support);
-builder.Services.AddSingleton(store); // ← REGISTRAR O STORE NO DI
+builder.Services.AddSingleton(store);
 
 var app = builder.Build();
 

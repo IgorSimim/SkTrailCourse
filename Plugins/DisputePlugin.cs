@@ -196,31 +196,32 @@ Resposta (apenas nome ou null):
         if (idx < 0) return "❌ Não encontrei essa reclamação.";
 
         var old = list[idx];
-        
+
         Console.WriteLine($"🔍 Editando reclamação {id}");
         Console.WriteLine($"📝 Original: {old.CustomerText}");
         Console.WriteLine($"🔧 Correção: {correctionText}");
 
         // Usa IA para preservar contexto de forma inteligente
         string newCustomerText = await PreserveContextUpdate(old.CustomerText, correctionText);
-        
+
         // Re-processa mantendo a intenção de disputa
         var orchestratorResult = await _orchestrator.HandleAsync(newCustomerText, isEdit: true);
-        
+
         // PRESERVAÇÃO INTELIGENTE DOS DADOS ORIGINAIS
         var finalMerchant = PreserveKnownMerchant(old.Merchant, orchestratorResult.Merchant);
         var finalAmountCents = orchestratorResult.AmountCents ?? old.AmountCents;
         var finalStatus = "Pendente";
         var finalActionTaken = UpdateActionWithNewValues(old.ActionTaken, finalMerchant, finalAmountCents);
 
-        list[idx] = old with { 
+        list[idx] = old with
+        {
             CustomerText = newCustomerText,
             Merchant = finalMerchant,
             AmountCents = finalAmountCents,
             Status = finalStatus,
             ActionTaken = finalActionTaken
         };
-        
+
         await _store.SaveListAsync(Key, list);
 
         return $@"✏️ Reclamação {id} atualizada.
@@ -460,7 +461,7 @@ INFORMAÇÃO COMPLEMENTAR:";
     {
         var knownMerchants = new[] { "netflix", "amazon", "spotify", "uber", "ifood", "google", "apple", "microsoft", "zoom", "zoop" };
         var lowerText = text.ToLower();
-        
+
         foreach (var merchant in knownMerchants)
         {
             if (lowerText.Contains(merchant))
@@ -510,7 +511,7 @@ INFORMAÇÃO COMPLEMENTAR:";
     {
         var knownMerchants = new[] { "netflix", "amazon", "spotify", "uber", "ifood", "google", "apple", "zoop" };
         var lowerOriginal = original.ToLower();
-        
+
         foreach (var merchant in knownMerchants)
         {
             if (lowerOriginal.Contains(merchant))
@@ -525,7 +526,7 @@ INFORMAÇÃO COMPLEMENTAR:";
 
     private bool HasValueInText(string text)
     {
-        return Regex.IsMatch(text, @"R\$\s*\d+[,.]?\d*") || 
+        return Regex.IsMatch(text, @"R\$\s*\d+[,.]?\d*") ||
                Regex.IsMatch(text.ToLower(), @"\d+\s*(reais|r\$|pila)");
     }
 
@@ -538,29 +539,29 @@ INFORMAÇÃO COMPLEMENTAR:";
     private string PreserveKnownMerchant(string originalMerchant, string? newMerchant)
     {
         var knownMerchants = new[] { "netflix", "amazon", "spotify", "uber", "ifood", "google", "apple" };
-        
+
         // Se o original era um merchant conhecido, preserva
-        if (!string.IsNullOrEmpty(originalMerchant) && 
+        if (!string.IsNullOrEmpty(originalMerchant) &&
             knownMerchants.Any(known => originalMerchant.ToLower().Contains(known)))
         {
             return originalMerchant;
         }
-        
+
         return newMerchant ?? originalMerchant;
     }
 
     private string UpdateActionWithNewValues(string originalAction, string merchant, int? amountCents)
     {
         if (!amountCents.HasValue) return originalAction;
-        
+
         var newAmount = $"R$ {amountCents.Value / 100.0:F2}";
-        
+
         // Atualiza valor
         var updated = System.Text.RegularExpressions.Regex.Replace(
             originalAction,
             @"R\$\s*\d+[,.]?\d*",
             newAmount);
-        
+
         // Atualiza o merchant se estiver específico
         if (!string.IsNullOrEmpty(merchant) && !merchant.Equals("desconhecido", StringComparison.OrdinalIgnoreCase))
         {
@@ -569,7 +570,7 @@ INFORMAÇÃO COMPLEMENTAR:";
                 @"(\w+)\s*-\s*R\$\s*\d+[,.]?\d*",
                 $"{merchant} - {newAmount}");
         }
-        
+
         return updated;
     }
 }

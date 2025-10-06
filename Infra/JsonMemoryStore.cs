@@ -37,7 +37,6 @@ public class JsonMemoryStore
         await File.WriteAllTextAsync(filePath, json);
     }
 
-    // Conversation context helpers
     public async Task<ConversationContext?> GetContextAsync(string sessionId)
     {
         var list = await LoadListAsync<ConversationContext>("conversation_contexts");

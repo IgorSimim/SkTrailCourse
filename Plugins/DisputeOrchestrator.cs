@@ -26,29 +26,29 @@ public class DisputeOrchestrator
     {
         // Extrai informações usando IA de forma robusta
         var analysis = await ExtractInformationWithAI(customerText);
-        
+
         // SE for uma edição, força ser tratada como disputa para manter o contexto original
         if (isEdit)
         {
             return ApplyPolicy(
-                customerText, 
-                analysis.Merchant, 
-                analysis.AmountCents, 
+                customerText,
+                analysis.Merchant,
+                analysis.AmountCents,
                 true,  // Força ser disputa em edições
                 analysis.Confidence
             );
         }
-        
+
         return ApplyPolicy(
-            customerText, 
-            analysis.Merchant, 
-            analysis.AmountCents, 
-            analysis.IsDispute, 
+            customerText,
+            analysis.Merchant,
+            analysis.AmountCents,
+            analysis.IsDispute,
             analysis.Confidence
         );
     }
 
-    // NOVO MÉTODO: Consulta de boletos com interação
+    // Consulta de boletos com interação
     public async Task<string> HandleBoletoConsultaAsync(string initialInput)
     {
         Console.Write("👤 Por favor, informe seu CPF para consulta: ");
@@ -68,7 +68,7 @@ public class DisputeOrchestrator
         return result.ToString();
     }
 
-    private async Task<(string? Merchant, int? AmountCents, bool IsDispute, double Confidence)> 
+    private async Task<(string? Merchant, int? AmountCents, bool IsDispute, double Confidence)>
         ExtractInformationWithAI(string customerText)
     {
         var prompt = $@"Você é um especialista em extrair informações de reclamações financeiras.
@@ -109,13 +109,13 @@ Exemplos:
             var root = doc.RootElement;
 
             var merchant = root.GetProperty("merchant").GetString();
-            
+
             int? amountCents = null;
             if (root.GetProperty("amount_cents").ValueKind != JsonValueKind.Null)
             {
                 amountCents = root.GetProperty("amount_cents").GetInt32();
             }
-            
+
             var isDispute = root.GetProperty("isDispute").GetBoolean();
             var confidence = root.GetProperty("confidence").GetDouble();
 
@@ -124,7 +124,7 @@ Exemplos:
         catch (Exception ex)
         {
             Console.WriteLine($"⚠️ Erro na extração com IA: {ex.Message}");
-            
+
             // Fallback conservativo - SEMPRE considera como disputa
             return (null, null, true, 0.3);
         }
@@ -146,45 +146,45 @@ Exemplos:
         {
             // Mesmo se a IA disser que não é disputa, trata como pendente
             return new OrchestratorResult(
-                "abrir_ticket", 
-                $"📋 Análise manual - {merchant ?? "Estabelecimento não identificado"}", 
-                merchant, 
-                amountCents, 
+                "abrir_ticket",
+                $"📋 Análise manual - {merchant ?? "Estabelecimento não identificado"}",
+                merchant,
+                amountCents,
                 "Pendente"
             );
         }
 
-        // 🎯 POLÍTICA INTELIGENTE
+        // POLÍTICA INTELIGENTE
         if (amountCents.HasValue)
         {
             var amountReais = amountCents.Value / 100.0;
-            
+
             if (amountCents.Value <= 5000 && confidence >= 0.7) // Até R$ 50,00
             {
                 return new OrchestratorResult(
-                    "aprovar_reembolso_provisorio", 
+                    "aprovar_reembolso_provisorio",
                     $"✅ Reembolso automático para {merchant ?? "estabelecimento"} - R$ {amountReais:F2}",
-                    merchant, 
-                    amountCents, 
+                    merchant,
+                    amountCents,
                     "Reembolso Aprovado"
                 );
             }
-            
+
             return new OrchestratorResult(
-                "abrir_ticket", 
+                "abrir_ticket",
                 $"📋 Análise manual necessária - {merchant ?? "Estabelecimento"} - R$ {amountReais:F2}",
-                merchant, 
-                amountCents, 
+                merchant,
+                amountCents,
                 "Pendente"
             );
         }
 
         // Sem valor identificado
         return new OrchestratorResult(
-            "abrir_ticket", 
+            "abrir_ticket",
             $"📋 Análise manual - {merchant ?? "Estabelecimento não identificado"}",
-            merchant, 
-            null, 
+            merchant,
+            null,
             "Pendente"
         );
     }
