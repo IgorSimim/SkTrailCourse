@@ -81,8 +81,8 @@ OU
   ""parameters"": {{}}
 }}";
 
-            var result = await _kernel.InvokePromptAsync(prompt);
-            var response = result.ToString().Trim();
+            var result = await _kernel.InvokePromptWithRetryAsync(prompt);
+            var response = result?.ToString().Trim() ?? string.Empty;
 
             Console.WriteLine($"🤖 Resposta da IA: {response}");
 

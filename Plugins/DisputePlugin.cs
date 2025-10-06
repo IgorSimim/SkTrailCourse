@@ -379,8 +379,8 @@ Intenção:";
 
         try
         {
-            var result = await _kernel.InvokePromptAsync(prompt);
-            return result.ToString().Trim();
+            var result = await _kernel.InvokePromptWithRetryAsync(prompt);
+            return result?.ToString().Trim() ?? "FULL_REPLACE";
         }
         catch (Exception ex)
         {
@@ -406,8 +406,8 @@ TEXTO ATUALIZADO:";
 
         try
         {
-            var result = await _kernel.InvokePromptAsync(prompt);
-            var updatedText = result.ToString().Trim().Trim('"');
+            var result = await _kernel.InvokePromptWithRetryAsync(prompt);
+            var updatedText = result?.ToString().Trim().Trim('"') ?? correction;
             Console.WriteLine($"🤖 Texto contextual gerado: {updatedText}");
             return updatedText;
         }
@@ -431,8 +431,8 @@ INFORMAÇÃO COMPLEMENTAR:";
 
         try
         {
-            var result = await _kernel.InvokePromptAsync(prompt);
-            return result.ToString().Trim().Trim('"');
+            var result = await _kernel.InvokePromptWithRetryAsync(prompt);
+            return result?.ToString().Trim().Trim('"') ?? correction;
         }
         catch (Exception ex)
         {

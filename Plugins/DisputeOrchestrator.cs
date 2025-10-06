@@ -102,7 +102,7 @@ Exemplos:
 
         try
         {
-            var response = await _kernel.InvokePromptAsync(prompt);
+            var response = await _kernel.InvokePromptWithRetryAsync(prompt);
             var jsonText = CleanJsonResponse(response.ToString());
 
             var doc = JsonDocument.Parse(jsonText);

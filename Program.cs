@@ -135,5 +135,4 @@ app.MapControllerRoute(
 Console.WriteLine("🚀 ZoopIA Web iniciado!");
 Console.WriteLine("📱 Acesse: https://localhost:5000");
 Console.WriteLine("🔐 Sessão configurada com sucesso!");
-Console.WriteLine("🤖 Modelo Gemini conectado com sucesso!");
 app.Run();

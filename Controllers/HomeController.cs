@@ -135,8 +135,14 @@ public class HomeController : Controller
             state.AddToHistory(command, "user");
             UpdateConversationState(state);
 
-            // DETECÇÃO DE CONTEXTO ZOOP - Oferece escolha entre consulta e reclamação
-            if (ContainsZoopContext(command) && state.CurrentStep == "normal")
+            // 🔧 CORREÇÃO MELHORADA: Detecção Zoop sempre que mencionado
+            var isZoopContext = ContainsZoopContext(command);
+            var isDuringActiveFlow = state.CurrentStep == "aguardando_cpf" || 
+                                    state.CurrentStep == "aguardando_merchant" ||
+                                    state.CurrentStep == "aguardando_detalhes_reclamacao" ||
+                                    state.CurrentStep == "aguardando_opcao_zoop";
+
+            if (isZoopContext && !isDuringActiveFlow && !IsSimpleCommand(command))
             {
                 state.CurrentStep = "aguardando_opcao_zoop";
                 state.PreviousMessage = command;
@@ -152,12 +158,13 @@ public class HomeController : Controller
                 return Json(response);
             }
 
-            // Se está aguardando opção Zoop, processa a escolha
+            // 🔧 CORREÇÃO COMPLETA: Fluxo Zoop com fallback robusto
             if (state.CurrentStep == "aguardando_opcao_zoop")
             {
-                var decision = await DetectConfirmationViaAI(command);
+                var lowerCommand = command.ToLowerInvariant().Trim();
                 
-                if (decision == ConfirmationDecision.Consult)
+                // 🔧 DETECÇÃO MANUAL PRIORITÁRIA (evita dependência da IA)
+                if (lowerCommand == "consultar" || lowerCommand.Contains("consultar") || lowerCommand == "consulta")
                 {
                     state.CurrentStep = "aguardando_cpf";
                     state.LastUpdate = DateTime.UtcNow;
@@ -168,7 +175,7 @@ public class HomeController : Controller
                     return Json(response);
                 }
                 
-                if (decision == ConfirmationDecision.Complaint)
+                if (lowerCommand == "reclamar" || lowerCommand.Contains("reclamar") || lowerCommand == "reclamação")
                 {
                     // Usa a mensagem original para criar a reclamação
                     var complaintText = state.PreviousMessage;
@@ -182,10 +189,46 @@ public class HomeController : Controller
                     return Json(response);
                 }
                 
-                // Se não detectou claramente, pede novamente
+                // 🔧 FALLBACK PARA IA (apenas se necessário)
+                try
+                {
+                    var decision = await DetectConfirmationViaAI(command);
+                    
+                    if (decision == ConfirmationDecision.Consult)
+                    {
+                        state.CurrentStep = "aguardando_cpf";
+                        state.LastUpdate = DateTime.UtcNow;
+                        UpdateConversationState(state);
+                        
+                        response.RequiresCpfInput = true;
+                        response.Message = "👤 Para consultar os boletos da Zoop, preciso do seu CPF:";
+                        return Json(response);
+                    }
+                    
+                    if (decision == ConfirmationDecision.Complaint)
+                    {
+                        var complaintText = state.PreviousMessage;
+                        var createResult = await _disputes.AddDispute(complaintText);
+                        
+                        state.CurrentStep = "normal";
+                        state.ExpectedResponseType = string.Empty;
+                        UpdateConversationState(state);
+                        
+                        response.Message = createResult;
+                        return Json(response);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Erro na detecção por IA, usando fallback manual: {ex.Message}");
+                }
+                
+                // 🔧 FALLBACK FINAL: Se tudo falhar, pede entrada clara
                 response.RequiresConfirmation = true;
                 response.ConfirmationType = "zoop_intent";
-                response.Message = "🤔 Não consegui identificar. Você quer **CONSULTAR** boletos ou **ABRIR RECLAMAÇÃO**?\n\nDigite 'consultar' ou 'reclamar':";
+                response.Message = "🤔 Não consegui identificar. Por favor, digite exatamente:\n\n" +
+                                 "• **CONSULTAR** - para ver detalhes dos boletos\n" +
+                                 "• **RECLAMAR** - para abrir uma reclamação formal";
                 return Json(response);
             }
 
@@ -277,28 +320,30 @@ public class HomeController : Controller
 
             // Executa outras funções normalmente
             Console.WriteLine($"⚡ Invocando: {plugin}.{function}");
-            string invokeResult;
-            
+            // KernelResult is not defined in this project; use a general object to hold different result types
+            object? invokeResultObj = null;
+
             if (plugin == "Disputes" && function == "AddDisputeWithMerchant")
             {
                 var complaint = routeArgs.ContainsKey("complaint") ? routeArgs["complaint"]?.ToString() : command;
                 var merchant = routeArgs.ContainsKey("merchant") ? routeArgs["merchant"]?.ToString() : "";
-                
+
                 if (string.IsNullOrEmpty(merchant))
                 {
                     response.Message = "❌ Nome do estabelecimento não especificado.";
                     return Json(response);
                 }
-                
-                invokeResult = await _disputes.AddDisputeWithMerchant(complaint ?? command, merchant);
+
+                // AddDisputeWithMerchant returns a string message; store it directly
+                invokeResultObj = await _disputes.AddDisputeWithMerchant(complaint ?? command, merchant);
             }
             else
             {
-                var functionResult = await _kernel.InvokeAsync(plugin, function, routeArgs);
-                invokeResult = functionResult.GetValue<string>() ?? string.Empty;
+                // InvokeAsync returns a kernel result/context object; keep it as object and call ToString() below
+                invokeResultObj = await _kernel.InvokeWithRetryAsync(plugin, function, routeArgs);
             }
 
-            var resultText = invokeResult?.ToString() ?? "Sem resposta";
+            var resultText = invokeResultObj?.ToString() ?? "Sem resposta";
             response.Message = resultText;
 
             // Dicas contextuais
@@ -442,22 +487,23 @@ public class HomeController : Controller
     {
         if (string.IsNullOrWhiteSpace(userText)) 
             return ConfirmationDecision.Unknown;
-            
-        var prompt = $"""
+        
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        
+        try
+        {
+            var prompt = $"""
 Analise se o usuário quer CONSULTAR boletos ou ABRIR RECLAMAÇÃO:
 
 Texto: "{userText}"
 
-Palavras-chave para CONSULTA: consultar, verificar, conferir, detalhes, informação, saber
-Palavras-chave para RECLAMAÇÃO: reclamar, indignação, problema, exigir, medidas, protesto
-
-Responda apenas com: CONSULTA ou RECLAMAÇÃO ou NAO_SEI
+Responda APENAS com UMA palavra: CONSULTA ou RECLAMAÇÃO
 """;
-        
-        try
-        {
-            var res = await _kernel.InvokePromptAsync(prompt);
-            var s = res.ToString().Trim().ToLower();
+            
+            var res = await _kernel.InvokePromptWithRetryAsync(prompt, cancellationToken: cts.Token);
+            var s = res?.ToString().Trim().ToLower() ?? string.Empty;
+            
+            Console.WriteLine($"🤖 Resposta da IA para confirmação: {s}");
             
             if (s.Contains("consulta")) 
                 return ConfirmationDecision.Consult;
@@ -466,8 +512,14 @@ Responda apenas com: CONSULTA ou RECLAMAÇÃO ou NAO_SEI
                 
             return ConfirmationDecision.Unknown;
         }
-        catch
+        catch (OperationCanceledException)
         {
+            Console.WriteLine("⏰ Timeout na detecção por IA");
+            return ConfirmationDecision.Unknown;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro na detecção por IA: {ex.Message}");
             return ConfirmationDecision.Unknown;
         }
     }
@@ -482,10 +534,26 @@ Responda apenas com: CONSULTA ou RECLAMAÇÃO ou NAO_SEI
         { 
             "zoop", "zoo p", "zoo.", "zoop brasil", "zoop brasil", 
             "boletos zoop", "cobrança zoop", "cobranca zoop", "empresa zoop",
-            "zoop brasil que nunca", "zoop brasil que nunca ouvi"
+            "zoop brasil que nunca", "zoop brasil que nunca ouvi", "zoop brasil que nunca ouvi falar",
+            "zoop no meu boleto", "zoop no extrato", "cobrança da zoop", "cobranca da zoop"
         };
         
         return zoopKeywords.Any(keyword => lower.Contains(keyword));
+    }
+
+    private bool IsSimpleCommand(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+            
+        var lower = text.ToLowerInvariant().Trim();
+        var simpleCommands = new[]
+        {
+            "consultar", "reclamar", "listar", "sair", "ajuda", "help",
+            "sim", "não", "não", "ok", "certo"
+        };
+        
+        return simpleCommands.Contains(lower) || lower.Length < 10;
     }
 
     private string FormatCpf(string cpf)
