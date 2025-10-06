@@ -20,39 +20,6 @@ public class AIIntentRouter
 
         var args = new KernelArguments();
 
-        // Detect ambiguous Zoop contexts that require explicit user confirmation
-        try
-        {
-            var lowered = input.ToLowerInvariant();
-            // Ambiguous patterns where 'zoop' could mean consulta ou reclamação
-            var ambiguousPatterns = new[]
-            {
-                "cobrança zoop",
-                "cobranca zoop",
-                "zoop no meu boleto",
-                "zoop no extrato",
-                "tem uma zoop no meu boleto",
-                "zoop no boleto",
-                "cobrança da zoop",
-                "cobranca da zoop",
-                "problema com zoop"
-            };
-
-            foreach (var pat in ambiguousPatterns)
-            {
-                if (lowered.Contains(pat))
-                {
-                    args["confirmationType"] = "zoop_intent";
-                    Console.WriteLine("⚠️ Entrada ambígua detectada para Zoop - solicitando confirmação do usuário");
-                    return (null, null, args);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Erro ao detectar padrão ambíguo: {ex.Message}");
-        }
-
         try
         {
             var prompt = @$"
@@ -65,30 +32,33 @@ FUNÇÕES DISPONÍVEIS:
 1. Disputes.AddDispute - PARA: Nova reclamação, fraude, cobrança indevida, problema não relatado antes
 2. Disputes.EditDispute - PARA: Corrigir, atualizar, modificar uma reclamação JÁ EXISTENTE (quando menciona ID ou se refere a uma reclamação anterior)
 3. Disputes.ListDisputes - PARA: Listar, ver, mostrar todas as reclamações
-4. Disputes.DeleteDispute - PARA: Excluir, remover, apagar uma reclamação específica
+4. Disputes.DeleteDispute - PARA: Excluir, remover, apagar, deletar uma reclamação específica
 5. Disputes.ShowDispute - PARA: Detalhes, informações específicas de uma reclamação
 6. BoletoLookup.SearchByCustomerName - PARA: Consultar, verificar, identificar origem de boletos/cobranças
 
 ANÁLISE DE INTENÇÃO - PERGUNTAS CRÍTICAS:
 
-- O usuário está se referindo a uma reclamação EXISTENTE (menciona ID como 9b344c60 ou fala ""aquela reclamação"")? → EditDispute/ShowDispute/DeleteDispute
+- O usuário quer EXCLUIR/REMOVER/DELETAR uma reclamação? → DeleteDispute
 - O usuário quer CRIAR uma NOVA reclamação? → AddDispute  
-- O usuário quer apenas CONSULTAR/VER informações? → ListDisputes ou SearchByCustomerName
-- O usuário menciona ""boleto"", ""cobrança"", ""verifiquei"" sem reclamar? → SearchByCustomerName
+- O usuário quer ATUALIZAR/MODIFICAR/CORRIGIR uma reclamação existente? → EditDispute
+- O usuário quer apenas CONSULTAR/VER informações de boletos? → SearchByCustomerName
+- O usuário quer LISTAR todas as reclamações? → ListDisputes
+- O usuário quer VER DETALHES de uma reclamação específica? → ShowDispute
 
 EXEMPLOS DE INTENÇÃO:
 
 - ""quero reclamar de uma cobrança da Netflix"" → NOVA reclamação → AddDispute
-- ""na vdd a reclamação 9b344c60 é de 500 reais"" → CORREÇÃO de existente → EditDispute (id: ""9b344c60"", correctionText: ""é de 500 reais"")
-- ""aquela reclamação que fiz, o valor é 300"" → CORREÇÃO de existente → EditDispute  
+- ""excluir a reclamação d8794da0"" → EXCLUIR → DeleteDispute (id: ""d8794da0"")
+- ""remover d8794da0"" → EXCLUIR → DeleteDispute (id: ""d8794da0"")
+- ""deletar minha reclamação"" → EXCLUIR → DeleteDispute
+- ""atualizar a reclamação abc123 para valor 500"" → EDITAR → EditDispute (id: ""abc123"", correctionText: ""valor 500"")
 - ""lista minhas reclamações"" → LISTAR → ListDisputes
-- ""verifiquei uma compra no boleto"" → CONSULTAR → SearchByCustomerName
-- ""excluir a 9b344c60"" → EXCLUIR → DeleteDispute (id: ""9b344c60"")
-- ""detalhes da abc123"" → DETALHES → ShowDispute (id: ""abc123"")
+- ""ver detalhes da d8794da0"" → DETALHES → ShowDispute (id: ""d8794da0"")
+- ""consultar boletos da Zoop"" → CONSULTAR → SearchByCustomerName
 
 EXTRAÇÃO DE PARÂMETROS:
-- Para EditDispute: extraia 'id' (padrão: 8 caracteres alfanuméricos) e 'correctionText' (o texto da correção)
-- Para DeleteDispute/ShowDispute: extraia apenas 'id'
+- SEMPRE extraia 'id' quando mencionado (padrão: 6-8 caracteres alfanuméricos)
+- Para EditDispute: extraia 'correctionText' (o texto da correção)
 - Para AddDispute: use o texto completo como 'complaint'
 
 RESPONDA SOMENTE COM JSON:
@@ -145,7 +115,7 @@ OU
                     {
                         var cleanPlugin = routeInfo.Plugin.Replace("Plugin ", "").Replace("plugin ", "").Trim();
 
-                        // Processa parâmetros de forma inteligente
+                        // Processa parâmetros da IA
                         if (routeInfo.Parameters != null)
                         {
                             foreach (var param in routeInfo.Parameters)
@@ -154,75 +124,100 @@ OU
                                 if (!string.IsNullOrEmpty(paramValue) && !paramValue.Equals("null", StringComparison.OrdinalIgnoreCase))
                                 {
                                     args[param.Key] = paramValue;
-                                    Console.WriteLine($"🔧 Parâmetro extraído: {param.Key} = {paramValue}");
+                                    Console.WriteLine($"🔧 Parâmetro extraído pela IA: {param.Key} = {paramValue}");
                                 }
                             }
                         }
 
-                        // GARANTE parâmetros obrigatórios baseados na função
-                        if (routeInfo.Function.Equals("AddDispute", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("complaint"))
-                        {
-                            args["complaint"] = input;
-                        }
+                        // Garante parâmetros essenciais
+                        EnsureEssentialParameters(args, routeInfo.Function, input);
 
-                        if (routeInfo.Function.Equals("EditDispute", StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (!args.ContainsKey("id"))
-                            {
-                                // Tenta extrair ID como fallback
-                                var extractedId = ExtractIdFromInput(input);
-                                if (extractedId != null)
-                                {
-                                    args["id"] = extractedId;
-                                    args["correctionText"] = input;
-                                    Console.WriteLine($"🔧 ID extraído como fallback: {extractedId}");
-                                }
-                            }
-                            if (!args.ContainsKey("correctionText"))
-                            {
-                                args["correctionText"] = input;
-                            }
-                        }
-
-                        if ((routeInfo.Function.Equals("DeleteDispute", StringComparison.OrdinalIgnoreCase) ||
-                             routeInfo.Function.Equals("ShowDispute", StringComparison.OrdinalIgnoreCase)) &&
-                            !args.ContainsKey("id"))
-                        {
-                            var extractedId = ExtractIdFromInput(input);
-                            if (extractedId != null)
-                            {
-                                args["id"] = extractedId;
-                            }
-                        }
-
-                        Console.WriteLine($"🎯 Roteamento final: {cleanPlugin}.{routeInfo.Function}");
+                        Console.WriteLine($"🎯 Roteamento final pela IA: {cleanPlugin}.{routeInfo.Function}");
                         return (cleanPlugin, routeInfo.Function, args);
                     }
                 }
                 catch (JsonException jex)
                 {
-                    Console.WriteLine($"❌ Erro ao analisar JSON: {jex.Message}");
+                    Console.WriteLine($"❌ Erro ao analisar JSON da IA: {jex.Message}");
                     Console.WriteLine($"📄 JSON problemático: {jsonRaw}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Erro no roteador: {ex.Message}");
+            Console.WriteLine($"❌ Erro no roteador IA: {ex.Message}");
         }
 
-        // FALLBACK MÍNIMO: Se tudo falhar, pergunta se é consulta ou reclamação
-        Console.WriteLine($"🔄 Fallback mínimo - assumindo consulta de boleto");
+        // Fallback para consulta
+        Console.WriteLine($"🔄 Fallback - assumindo consulta de boleto");
         return ("BoletoLookup", "SearchByCustomerName", args);
+    }
+
+    private void EnsureEssentialParameters(KernelArguments args, string function, string input)
+    {
+        // Garante parâmetros obrigatórios baseados na função
+        if (function.Equals("AddDispute", StringComparison.OrdinalIgnoreCase) && !args.ContainsKey("complaint"))
+        {
+            args["complaint"] = input;
+        }
+
+        if (function.Equals("EditDispute", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!args.ContainsKey("id"))
+            {
+                var extractedId = ExtractIdFromInput(input);
+                if (extractedId != null)
+                {
+                    args["id"] = extractedId;
+                    Console.WriteLine($"🔧 ID extraído como fallback: {extractedId}");
+                }
+            }
+            if (!args.ContainsKey("correctionText"))
+            {
+                args["correctionText"] = input;
+            }
+        }
+
+        if ((function.Equals("DeleteDispute", StringComparison.OrdinalIgnoreCase) || 
+             function.Equals("ShowDispute", StringComparison.OrdinalIgnoreCase)) &&
+            !args.ContainsKey("id"))
+        {
+            var extractedId = ExtractIdFromInput(input);
+            if (extractedId != null)
+            {
+                args["id"] = extractedId;
+                Console.WriteLine($"🔧 ID extraído como fallback: {extractedId}");
+            }
+        }
     }
 
     private string? ExtractIdFromInput(string input)
     {
         try
         {
-            var idPattern = @"\b[a-f0-9]{8}\b|\b[A-Za-z0-9]{6,8}\b";
-            var match = Regex.Match(input, idPattern);
-            return match.Success ? match.Value : null;
+            // Padrão flexível para IDs - 6-8 caracteres alfanuméricos
+            var idPattern = @"\b[a-zA-Z0-9]{6,8}\b";
+            var matches = Regex.Matches(input, idPattern);
+            
+            // Filtra palavras comuns que não são IDs
+            var commonWords = new[] { 
+                "quero", "deletar", "remover", "excluir", "apagar", 
+                "minhas", "reclamacoes", "reclamações", "disputa",
+                "listar", "consultar", "detalhes", "ver", "mostrar"
+            };
+            
+            foreach (Match match in matches)
+            {
+                var candidate = match.Value;
+                // Verifica se não é uma palavra comum
+                if (!commonWords.Contains(candidate.ToLower()) && 
+                    !int.TryParse(candidate, out _)) // não é apenas números
+                {
+                    return candidate;
+                }
+            }
+            
+            return null;
         }
         catch (Exception ex)
         {

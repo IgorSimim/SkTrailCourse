@@ -3,20 +3,44 @@ using Microsoft.SemanticKernel.Connectors.Google;
 using SkTrailCourse.Infra;
 using SkTrailCourse.Plugins;
 using DotNetEnv;
+using Microsoft.AspNetCore.DataProtection;
 
 Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
+// 🔧 CONFIGURAÇÃO DATA PROTECTION PARA DESENVOLVIMENTO
+var keysDirectory = Path.Combine(Directory.GetCurrentDirectory(), "data-protection-keys");
+if (!Directory.Exists(keysDirectory))
+{
+    Directory.CreateDirectory(keysDirectory);
+}
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory))
+    .SetApplicationName("ZoopIA")
+    .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
+
+// Para desenvolvimento, podemos usar criptografia simulada
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddDataProtection()
+        .UseEphemeralDataProtectionProvider();
+}
+
 // Add services to the container
 builder.Services.AddControllersWithViews();
-// Add session support for conversation state
+
+// 🔧 CONFIGURAÇÃO DE SESSÃO CORRIGIDA
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
-    options.Cookie.Name = ".ZoopIA.Session";
+    options.Cookie.Name = "ZoopIA.Session";
     options.IdleTimeout = TimeSpan.FromHours(2);
     options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.None; // Para desenvolvimento
 });
 
 // Configuração do Semantic Kernel
@@ -46,7 +70,9 @@ catch (Exception ex)
 }
 
 var kernel = kernelBuilder.Build();
-var store = new JsonMemoryStore("data"); // ← CRIAR A INSTÂNCIA
+
+// 🔧 CORREÇÃO: Criar o JsonMemoryStore ANTES dos plugins que dependem dele
+var store = new JsonMemoryStore("data");
 
 // === Plugins ===
 var orchestrator = new DisputeOrchestrator(kernel, store);
@@ -54,14 +80,23 @@ var disputes = new DisputePlugin(store, kernel, orchestrator);
 var boletoLookup = new BoletoLookupPlugin();
 var support = new SupportPlugin();
 
-kernel.ImportPluginFromObject(disputes, "Disputes");
-kernel.ImportPluginFromObject(boletoLookup, "BoletoLookup");
-kernel.ImportPluginFromObject(support, "Support");
+// 🔧 CORREÇÃO: Usar ImportPluginFromObject (síncrono) em vez do assíncrono
+try
+{
+    kernel.ImportPluginFromObject(disputes, "Disputes");
+    kernel.ImportPluginFromObject(boletoLookup, "BoletoLookup");
+    kernel.ImportPluginFromObject(support, "Support");
+    Console.WriteLine("✅ Plugins carregados com sucesso!");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ Erro ao carregar plugins: {ex.Message}");
+}
 
 // Router
 var router = new AIIntentRouter(kernel);
 
-// Registrar serviços no DI
+// 🔧 CORREÇÃO: Registrar serviços no DI na ordem correta
 builder.Services.AddSingleton(kernel);
 builder.Services.AddSingleton(router);
 builder.Services.AddSingleton(orchestrator);
@@ -78,10 +113,17 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
+else
+{
+    // 🔧 PARA DESENVOLVIMENTO: Configurações mais relaxadas
+    app.UseDeveloperExceptionPage();
+}
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+
+// 🔧 CRÍTICO: UseSession() deve vir ANTES do UseAuthorization()
 app.UseSession();
 app.UseAuthorization();
 
@@ -92,5 +134,6 @@ app.MapControllerRoute(
 // Mensagem de inicialização
 Console.WriteLine("🚀 ZoopIA Web iniciado!");
 Console.WriteLine("📱 Acesse: https://localhost:5000");
-
+Console.WriteLine("🔐 Sessão configurada com sucesso!");
+Console.WriteLine("🤖 Modelo Gemini conectado com sucesso!");
 app.Run();

@@ -20,22 +20,21 @@ public class HomeController : Controller
     private readonly JsonMemoryStore _store;
 
     public HomeController(
-        Kernel kernel,
-        AIIntentRouter router,
+        Kernel kernel, 
+        AIIntentRouter router, 
         DisputeOrchestrator orchestrator,
         BoletoLookupPlugin boletoLookup,
         DisputePlugin disputes,
-        JsonMemoryStore store)
+        JsonMemoryStore store) 
     {
         _kernel = kernel;
         _router = router;
         _orchestrator = orchestrator;
         _boletoLookup = boletoLookup;
         _disputes = disputes;
-        _store = store;
+        _store = store; 
     }
 
-    // Heurística simples para decidir se a entrada do usuário é provavelmente uma reclamação
     public IActionResult Index()
     {
         var welcomeMessage = new StringBuilder();
@@ -62,13 +61,10 @@ public class HomeController : Controller
 
             Console.WriteLine($"📥 Processando confirmação: Type={input.Type}, UserResponse={input.UserResponse}");
 
-            // Detectar se o usuário quer CONSULTAR ou RECLAMAR com base em texto natural
-            // Recupera contexto da sessão (ConversationState) para manter estado entre requisições
             var state = GetConversationState();
-
-            // Armazena a resposta do usuário no histórico para preservar contexto
             state.AddToHistory(input.UserResponse, "user");
             UpdateConversationState(state);
+            
             var detected = await DetectConfirmationViaAI(input.UserResponse);
 
             if (detected == ConfirmationDecision.Consult)
@@ -77,8 +73,7 @@ public class HomeController : Controller
                 response.RequiresCpfInput = true;
                 response.RequiresConfirmation = false;
                 response.ConfirmationType = input.Type;
-
-                // Atualiza estado na sessão
+                
                 state.CurrentStep = "aguardando_cpf";
                 state.LastUpdate = DateTime.UtcNow;
                 state.ExpectedResponseType = input.Type;
@@ -91,6 +86,7 @@ public class HomeController : Controller
                 response.Message = "📝 Entendi que você quer abrir uma reclamação. Por favor, descreva o problema com mais detalhes:";
                 response.RequiresConfirmation = false;
                 response.ConfirmationType = input.Type;
+                
                 state.CurrentStep = "aguardando_detalhes_reclamacao";
                 state.LastUpdate = DateTime.UtcNow;
                 state.ExpectedResponseType = input.Type;
@@ -98,10 +94,10 @@ public class HomeController : Controller
                 return Json(response);
             }
 
-            // Se não detectou claramente, pede para o usuário responder com texto natural
             response.Message = "🤔 Não consegui identificar claramente. Você prefere CONSULTAR seus boletos da Zoop ou ABRIR UMA RECLAMAÇÃO?";
             response.RequiresConfirmation = true;
             response.ConfirmationType = input.Type;
+            
             state.CurrentStep = "aguardando_opcao_zoop";
             state.LastUpdate = DateTime.UtcNow;
             state.ExpectedResponseType = input.Type;
@@ -125,7 +121,7 @@ public class HomeController : Controller
         try
         {
             var response = new ChatResponse();
-
+            
             if (string.IsNullOrWhiteSpace(input.Command))
             {
                 response.Message = "❌ Comando vazio.";
@@ -135,37 +131,71 @@ public class HomeController : Controller
             var command = input.Command.Trim();
             var state = GetConversationState();
             Console.WriteLine($"📥 Comando recebido: '{command}'");
-            // Salva a mensagem do usuário no histórico de conversa
+            
             state.AddToHistory(command, "user");
             UpdateConversationState(state);
 
+            // DETECÇÃO DE CONTEXTO ZOOP - Oferece escolha entre consulta e reclamação
+            if (ContainsZoopContext(command) && state.CurrentStep == "normal")
+            {
+                state.CurrentStep = "aguardando_opcao_zoop";
+                state.PreviousMessage = command;
+                state.ExpectedResponseType = "zoop_intent";
+                UpdateConversationState(state);
+
+                response.RequiresConfirmation = true;
+                response.ConfirmationType = "zoop_intent";
+                response.Message = $"🤔 Entendi que você mencionou a Zoop. O que você gostaria de fazer?\n\n" +
+                                 $"🔍 **CONSULTAR** detalhes dos boletos (precisa do CPF)\n\n" +
+                                 $"🚨 **ABRIR RECLAMAÇÃO** formal contra a Zoop\n\n" +
+                                 $"Digite 'consultar' ou 'reclamar':";
+                return Json(response);
+            }
+
+            // Se está aguardando opção Zoop, processa a escolha
+            if (state.CurrentStep == "aguardando_opcao_zoop")
+            {
+                var decision = await DetectConfirmationViaAI(command);
+                
+                if (decision == ConfirmationDecision.Consult)
+                {
+                    state.CurrentStep = "aguardando_cpf";
+                    state.LastUpdate = DateTime.UtcNow;
+                    UpdateConversationState(state);
+                    
+                    response.RequiresCpfInput = true;
+                    response.Message = "👤 Para consultar os boletos da Zoop, preciso do seu CPF:";
+                    return Json(response);
+                }
+                
+                if (decision == ConfirmationDecision.Complaint)
+                {
+                    // Usa a mensagem original para criar a reclamação
+                    var complaintText = state.PreviousMessage;
+                    var createResult = await _disputes.AddDispute(complaintText);
+                    
+                    state.CurrentStep = "normal";
+                    state.ExpectedResponseType = string.Empty;
+                    UpdateConversationState(state);
+                    
+                    response.Message = createResult;
+                    return Json(response);
+                }
+                
+                // Se não detectou claramente, pede novamente
+                response.RequiresConfirmation = true;
+                response.ConfirmationType = "zoop_intent";
+                response.Message = "🤔 Não consegui identificar. Você quer **CONSULTAR** boletos ou **ABRIR RECLAMAÇÃO**?\n\nDigite 'consultar' ou 'reclamar':";
+                return Json(response);
+            }
+
+            // Comandos simples diretos (sem IA)
             var normalized = command.ToLowerInvariant().Trim();
             if (normalized == "listar reclamações" || normalized == "minhas reclamações" || normalized == "ver disputas" || normalized == "listar")
             {
-                var listResult = await _kernel.InvokeAsync("Disputes", "ListDisputes");
-                return Json(new ChatResponse { Message = "📋 " + listResult.ToString() });
-            }
-
-            if (normalized == "listar empresas" || normalized == "empresas cadastradas")
-            {
-                return Json(new ChatResponse { Message = "📋 Lista de empresas não está disponível no momento." });
-            }
-
-            if (normalized == "consultar boletos" || normalized == "ver boletos zoop" || normalized.StartsWith("consultar"))
-            {
-                state.CurrentStep = "aguardando_cpf";
-                state.PreviousMessage = command;
-                UpdateConversationState(state);
-                return Json(new ChatResponse { RequiresCpfInput = true, Message = "👤 Para consultar boletos, por favor informe o CPF:" });
-            }
-
-            if (normalized.StartsWith("reclamar") || normalized.StartsWith("abrir reclama"))
-            {
-                state.CurrentStep = "aguardando_merchant";
-                state.PreviousMessage = command;
-                state.ExpectedResponseType = "merchant_required";
-                UpdateConversationState(state);
-                return Json(new ChatResponse { Message = "📝 Sobre qual estabelecimento você quer reclamar? Se já descreveu, apenas confirme.", RequiresConfirmation = true });
+                var listResult = await _disputes.ListDisputes();
+                response.Message = listResult;
+                return Json(response);
             }
 
             if (normalized == "sair" || normalized == "exit")
@@ -188,352 +218,100 @@ public class HomeController : Controller
                 return Json(farewell);
             }
 
-            // Se o estado está 'normal' mas já temos um contexto Zoop preservado,
-            // reentramos no fluxo de escolha (consultar/reclamar) para não perder o contexto.
-            if (state.CurrentStep == "normal" &&
-                (!string.IsNullOrWhiteSpace(state.PreviousMessage) && state.PreviousMessage.IndexOf("zoop", StringComparison.OrdinalIgnoreCase) >= 0
-                 || state.ExpectedResponseType == "zoop_contexto"))
-            {
-                // reabre a escolha Zoop
-                state.CurrentStep = "aguardando_opcao_zoop";
-                state.ExpectedResponseType = "zoop_detalhado";
-                UpdateConversationState(state);
-
-                var amountSummaryRe = ExtractAmountSummary(state.PreviousMessage ?? command);
-                var amountTextRe = string.IsNullOrEmpty(amountSummaryRe) ? "" : $" no valor de {amountSummaryRe}";
-
-                return Json(new ChatResponse
-                {
-                    RequiresConfirmation = true,
-                    ConfirmationType = "zoop_detalhado",
-                    Message = $"🤔 Você mencionou a Zoop{amountTextRe}. O que você gostaria de fazer?\n\n🔍 CONSULTAR detalhes dos boletos (precisa do CPF)\n\n🚨 ABRIR RECLAMAÇÃO formal\n\nDigite 'consultar' ou 'reclamar':"
-                });
-            }
-
-            // Análise de intenção via IA (apenas IA, sem heurísticas manuais)
-            if (state.CurrentStep == "normal")
-            {
-                try
-                {
-                    // Early check: finalização / agradecimento comum — tratar imediatamente
-                    if (Regex.IsMatch(command, "^\\s*(obrigad[oa]|valeu|tchau|até|adeus)\\b", RegexOptions.IgnoreCase))
-                    {
-                        var farewell = new ChatResponse { Message = "👋 Obrigado! Volte sempre que precisar.", IsExit = true };
-                        ResetConversationState();
-                        return Json(farewell);
-                    }
-
-                    // First, run a fast deterministic intent detector that guarantees recognition of built-in commands
-                    var intent = await AnalyzeUserIntent(command);
-                    Console.WriteLine($"🤖 Intent (deterministic/AI): {intent}");
-                    Console.WriteLine($"🤖 Intent (IA): {intent}");
-
-                    switch (intent)
-                    {
-                        case "consultar_zoop":
-                            state.CurrentStep = "aguardando_cpf";
-                            state.PreviousMessage = command;
-                            state.LastUpdate = DateTime.UtcNow;
-                            UpdateConversationState(state);
-                            return Json(new ChatResponse { RequiresCpfInput = true, Message = "👤 Para consultar boletos da Zoop, preciso do seu CPF:" });
-
-                        // Deterministic/manual fallback cases
-                        case "listar_reclamacoes":
-                            var listResult = await _kernel.InvokeAsync("Disputes", "ListDisputes");
-                            return Json(new ChatResponse { Message = "📋 " + listResult.ToString() });
-
-                        case "listar_empresas":
-                            // Lista de empresas não disponível via plugin atualmente — retorna placeholder amigável
-                            return Json(new ChatResponse { Message = "📋 Lista de empresas não disponível no momento." });
-
-                        case "ajuda":
-                            return Json(new ChatResponse { Message = "📚 Exemplos: 'consultar boletos da Zoop', 'reclamar da Netflix', 'listar reclamações'" });
-
-                        case "consulta_clara":
-                            state.CurrentStep = "aguardando_cpf";
-                            state.PreviousMessage = command;
-                            state.LastUpdate = DateTime.UtcNow;
-                            UpdateConversationState(state);
-                            return Json(new ChatResponse { RequiresCpfInput = true, Message = "👤 Para consultar boletos, por favor informe o CPF:" });
-
-                        case "reclamacao_clara":
-                            // Start flow to capture merchant or use inline merchant
-                            state.CurrentStep = "aguardando_merchant";
-                            state.PreviousMessage = command;
-                            state.ExpectedResponseType = "merchant_required";
-                            UpdateConversationState(state);
-                            return Json(new ChatResponse { Message = "📝 Sobre qual estabelecimento você quer reclamar? Se já descreveu, apenas confirme.", RequiresConfirmation = true });
-
-
-
-                        case "reclamar_zoop":
-                            // If the message is detailed (values, dates, boleto info), prefer asking CONSULTAR vs RECLAMAR
-                            if (IsDetailedZoopContext(command) || IsDetailedZoopContext(state.PreviousMessage ?? string.Empty))
-                            {
-                                state.CurrentStep = "aguardando_opcao_zoop";
-                                state.PreviousMessage = command;
-                                state.ExpectedResponseType = "zoop_detalhado";
-                                UpdateConversationState(state);
-                                return Json(new ChatResponse
-                                {
-                                    RequiresConfirmation = true,
-                                    ConfirmationType = "zoop_detalhado",
-                                    Message = $"🤔 Você mencionou a Zoop{(string.IsNullOrEmpty(ExtractAmountSummary(command)) ? "" : " no valor de " + ExtractAmountSummary(command))}. O que você gostaria de fazer?\n\n🔍 CONSULTAR detalhes dos boletos (precisa do CPF)\n\n🚨 ABRIR RECLAMAÇÃO formal\n\nDigite 'consultar' ou 'reclamar':"
-                                });
-                            }
-
-                            // Abrir reclamação automaticamente para Zoop (IA decidiu and not detailed)
-                            var disputeResultZ = await _disputes.AddDispute(command + " | Estabelecimento: Zoop");
-                            // Resetar o estado após ação final
-                            ResetConversationState();
-                            return Json(new ChatResponse { Message = disputeResultZ });
-
-                        case "reclamar_outra":
-                            state.CurrentStep = "aguardando_merchant";
-                            state.PreviousMessage = command;
-                            state.ExpectedResponseType = "merchant_required";
-                            UpdateConversationState(state);
-                            return Json(new ChatResponse { RequiresConfirmation = true, Message = "📝 Sobre qual estabelecimento você quer reclamar? Por favor, informe o nome da empresa:" });
-
-                        case "finalizar":
-                        case "finalizacao":
-                            var farewell2 = new ChatResponse { Message = "👋 Obrigado! Volte sempre que precisar.", IsExit = true };
-                            ResetConversationState();
-                            return Json(farewell2);
-
-                        case "ambiguidade_zoop":
-                            // IA sinalizou ambiguidade: ofereça opções claras
-                            state.CurrentStep = "aguardando_opcao_zoop";
-                            state.PreviousMessage = command;
-                            state.ExpectedResponseType = "zoop_detalhado";
-                            UpdateConversationState(state);
-                            return Json(new ChatResponse
-                            {
-                                RequiresConfirmation = true,
-                                ConfirmationType = "zoop_detalhado",
-                                Message = "🤔 Estou em dúvida se você quer CONSULTAR boletos da Zoop ou ABRIR UMA RECLAMAÇÃO.\n\nDigite 'consultar' ou 'reclamar' (ou explique em poucas palavras):"
-                            });
-
-                        case "outro":
-                        default:
-                            // IA não entendeu a intenção: peça esclarecimento ao usuário
-                            return Json(new ChatResponse
-                            {
-                                Message = "🤔 Não consegui entender. Pode repetir de forma mais específica?\n\n" +
-                                         "Exemplos:\n" +
-                                         "• 'consultar boletos da Zoop'\n" +
-                                         "• 'reclamar da Netflix'\n" +
-                                         "• 'listar minhas reclamações'"
-                            });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"❌ Erro ao analisar intenção via IA: {ex.Message}");
-                    // Proceed with existing logic as fallback
-                }
-            }
-
-            // Caso: o usuário acabou de fazer uma consulta e agora diz que quer reclamar
-            if (state.CurrentStep == "consulta_realizada")
-            {
-                var postConsultDecision = await DetectConfirmationViaAI(command);
-                if (postConsultDecision == ConfirmationDecision.Complaint)
-                {
-                    // Reaproveita a consulta anterior como base para a reclamação
-                    var complaintText = string.IsNullOrWhiteSpace(state.PreviousMessage) ? command : state.PreviousMessage + " | " + command;
-                    state.AddToHistory(command, "user");
-                    UpdateConversationState(state);
-
-                    var createResult = await _disputes.AddDispute(complaintText);
-                    // Após criar a disputa, não removemos completamente o estado: deixamos em 'normal'
-                    // mas preservamos PreviousMessage para contexto futuro.
-                    state.CurrentStep = "normal";
-                    state.ExpectedResponseType = string.Empty;
-                    UpdateConversationState(state);
-                    return Json(new ChatResponse { Message = createResult });
-                }
-            }
-
-            // (Zoop-detailed handling is now performed earlier via the AI intent analyzer)
-
-            // Caso: estamos aguardando que o usuário informe o estabelecimento
-            if (state.CurrentStep == "aguardando_merchant")
-            {
-                var userResponse = command;
-
-                // Permitimos QUALQUER nome informado pelo usuário (desde que não ofenda)
-                var establishmentName = ExtractEstablishmentName(userResponse);
-
-                // Se usuário digitou texto extenso, tentamos limpar e pegar o nome (primeira palavra/frase)
-                if (string.IsNullOrWhiteSpace(establishmentName))
-                {
-                    // Tenta limpar pontuação e pegar as primeiras palavras
-                    var cleaned = Regex.Replace(userResponse, @"[^\w\s\-\.\,]", "").Trim();
-                    var parts = cleaned.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                    establishmentName = parts.FirstOrDefault()?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
-                }
-
-                if (ContainsOffensiveContent(establishmentName))
-                {
-                    return Json(new ChatResponse
-                    {
-                        RequiresConfirmation = true,
-                        Message = "❌ Conteúdo inadequado detectado no nome do estabelecimento. Por favor, informe um nome apropriado."
-                    });
-                }
-                // Registra o merchant no histórico
-                state.AddToHistory(establishmentName, "user");
-                UpdateConversationState(state);
-
-                var previousComplaint = string.IsNullOrWhiteSpace(state.PreviousMessage) ? "" : state.PreviousMessage;
-                // Usa a reclamação original + estabelecimento informado para criar disputa
-                var createResult = await _disputes.AddDisputeWithMerchant(previousComplaint, establishmentName);
-                // Após criar a disputa, retornamos ao estado normal mas preservamos histórico/contexto
-                state.CurrentStep = "normal";
-                state.ExpectedResponseType = string.Empty;
-                UpdateConversationState(state);
-
-                return Json(new ChatResponse { Message = createResult });
-            }
-
-            // Comando de saída
-            if (command.Equals("sair", StringComparison.OrdinalIgnoreCase) ||
-                command.Equals("exit", StringComparison.OrdinalIgnoreCase))
-            {
-                response.Message = "👋 Encerrando ZoopIA. Até logo!\n========================================";
-                response.IsExit = true;
-                return Json(response);
-            }
-
-            // Comandos simples diretos (sem IA)
-            if (command.Equals("listar reclamações", StringComparison.OrdinalIgnoreCase) ||
-                command.Equals("listar", StringComparison.OrdinalIgnoreCase))
-            {
-                var listResult = await _kernel.InvokeAsync("Disputes", "ListDisputes");
-                response.Message = "📋 " + listResult.ToString();
-                return Json(response);
-            }
-
-            // Processamento com IA (apenas logs server-side; respostas ao usuário são limpas)
+            // Processamento principal via IA
             var routeResult = await _router.RouteAsync(command);
             var plugin = routeResult.plugin;
             var function = routeResult.function;
             var routeArgs = routeResult.args;
 
-            Console.WriteLine($"🎯 Roteamento definido: {plugin}.{function}");
+            Console.WriteLine($"🎯 Roteamento definido pela IA: {plugin}.{function}");
 
             if (plugin is null || function is null)
             {
-                response.Message = "🤔 Não entendi. Por favor, seja mais específico ou escolha uma opção:\n\n" +
-                             "• 'consultar' - Ver detalhes de boletos (precisa do CPF)\n" +
-                             "• 'reclamar' - Abrir nova reclamação\n" +
-                             "Digite sua escolha:";
+                response.Message = "🤔 Não entendi. Por favor, seja mais específico.\n\n" +
+                           "Exemplos:\n" +
+                           "• 'consultar boletos da Zoop'\n" +
+                           "• 'reclamar da Netflix'\n" + 
+                           "• 'listar minhas reclamações'\n" +
+                           "• 'deletar d8794da0'\n" +
+                           "• 'atualizar reclamação abc123'";
                 return Json(response);
             }
 
-            // Se estamos aguardando confirmação (por exemplo, zoop), tratar respostas curtas aqui
-            if (state.CurrentStep == "aguardando_opcao_zoop")
-            {
-                var detected = await DetectConfirmationViaAI(command);
-                if (detected == ConfirmationDecision.Consult)
-                {
-                    // Transita para aguardando_cpf
-                    state.CurrentStep = "aguardando_cpf";
-                    state.LastUpdate = DateTime.UtcNow;
-                    UpdateConversationState(state);
-                    var resp = new ChatResponse { Message = "👤 Para consulta, preciso do seu CPF:", RequiresCpfInput = true };
-                    return Json(resp);
-                }
-
-                if (detected == ConfirmationDecision.Complaint)
-                {
-                    // Se já temos uma mensagem anterior detalhada (ex: o usuário acabou de descrever a cobrança),
-                    // use essa mensagem para criar a reclamação automaticamente.
-                    var previousComplaint = string.IsNullOrWhiteSpace(state.PreviousMessage) ? command : state.PreviousMessage;
-                    // Registra no histórico que o usuário confirmou abrir reclamação
-                    state.AddToHistory(command, "user");
-                    UpdateConversationState(state);
-
-                    // Se não havia detalhes suficientes, pede descrição; caso contrário, cria a disputa
-                    if (string.IsNullOrWhiteSpace(previousComplaint))
-                    {
-                        state.CurrentStep = "aguardando_detalhes_reclamacao";
-                        state.LastUpdate = DateTime.UtcNow;
-                        UpdateConversationState(state);
-                        var resp = new ChatResponse { Message = "📝 Entendi que você quer abrir uma reclamação. Por favor, descreva o problema com mais detalhes:" };
-                        return Json(resp);
-                    }
-
-                    var createResult = await _disputes.AddDispute(previousComplaint);
-                    // Após criar a disputa, retornar ao estado normal e preservar histórico
-                    state.CurrentStep = "normal";
-                    state.ExpectedResponseType = string.Empty;
-                    state.LastUpdate = DateTime.UtcNow;
-                    UpdateConversationState(state);
-                    return Json(new ChatResponse { Message = createResult });
-                }
-                // Se não detectou, continua para análise normal
-            }
-
-            // Evita criação automática de disputa quando a entrada não parece ser uma reclamação clara
-            // Para AddDispute, confiamos na IA/orquestrador para decidir exigir mais detalhes.
-            if (string.Equals(plugin, "Disputes", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(function, "AddDispute", StringComparison.OrdinalIgnoreCase))
-            {
-                // Se a IA/orquestrador precisar de mais dados, o plugin retornará um marcador que tratamos abaixo.
-            }
-
-            // Caso especial para consulta de boletos (requer interação)
+            // CORREÇÃO: Evita chamar BoletoLookup sem parâmetros necessários
             if (plugin == "BoletoLookup" && function == "SearchByCustomerName")
             {
-                // Para consultas de boleto, pedimos CPF em vez do nome
+                // Em vez de chamar diretamente, pede CPF primeiro
                 response.RequiresCpfInput = true;
-                response.Message += "👤 Por favor, informe seu CPF (somente números ou formato padrão) para consulta:";
-                // Atualiza estado da sessão para aguardando_cpf
+                response.Message = "👤 Para consultar boletos, preciso do seu CPF:";
+                
                 state.CurrentStep = "aguardando_cpf";
                 state.PreviousMessage = command;
-                // Salva o contexto da consulta no histórico para uso posterior
                 state.AddToHistory(command, "user");
                 state.LastUpdate = DateTime.UtcNow;
                 UpdateConversationState(state);
                 return Json(response);
             }
 
-            // PARA TODOS OS OUTROS CASOS, usar o kernel normalmente
-            Console.WriteLine($"⚡ Invocando: {plugin}.{function}");
-            var invokeResult = await _kernel.InvokeAsync(plugin, function, routeArgs);
-
-            // Formatação da resposta (apenas conteúdo útil ao usuário)
-            var resultText = invokeResult?.ToString() ?? "Sem resposta";
-
-            // Se o plugin AddDispute indicar que precisa do estabelecimento, fazemos a pergunta
-            if (function == "AddDispute" && resultText.StartsWith("ESTABLISHMENT_REQUIRED|"))
+            // Caso especial: AddDispute pode precisar de estabelecimento
+            if (plugin == "Disputes" && function == "AddDispute")
             {
-                // Guarda a mensagem original para usar depois
-                state.CurrentStep = "aguardando_merchant";
-                // A parte após o marcador contém a reclamação original
-                var originalComplaint = resultText.Substring("ESTABLISHMENT_REQUIRED|".Length);
-                if (string.IsNullOrWhiteSpace(originalComplaint)) originalComplaint = command;
-                state.PreviousMessage = originalComplaint;
-                // Guarda a reclamação original no histórico para contexto futuro
-                state.AddToHistory(originalComplaint, "user");
-                state.ExpectedResponseType = "merchant_required";
-                UpdateConversationState(state);
+                var complaint = routeArgs.ContainsKey("complaint") ? routeArgs["complaint"]?.ToString() : command;
+                var testResult = await _disputes.AddDispute(complaint ?? command);
+                
+                if (testResult.StartsWith("ESTABLISHMENT_REQUIRED|"))
+                {
+                    state.CurrentStep = "aguardando_merchant";
+                    var originalComplaint = testResult.Substring("ESTABLISHMENT_REQUIRED|".Length);
+                    state.PreviousMessage = originalComplaint;
+                    state.ExpectedResponseType = "merchant_required";
+                    UpdateConversationState(state);
 
-                response.Message = "📝 Qual estabelecimento/empresa você quer reclamar? Por favor, especifique (ex: Netflix, Spotify, loja X):";
+                    response.Message = "📝 Qual estabelecimento/empresa você quer reclamar?";
+                    return Json(response);
+                }
+                
+                response.Message = testResult;
                 return Json(response);
             }
 
-            response.Message = resultText;
-
-            // Dica após adicionar disputa
-            if (function == "AddDispute")
+            // Executa outras funções normalmente
+            Console.WriteLine($"⚡ Invocando: {plugin}.{function}");
+            string invokeResult;
+            
+            if (plugin == "Disputes" && function == "AddDisputeWithMerchant")
             {
-                response.Message += "\n\n💡 Dica: Use 'listar reclamações' para ver todas as disputas.";
+                var complaint = routeArgs.ContainsKey("complaint") ? routeArgs["complaint"]?.ToString() : command;
+                var merchant = routeArgs.ContainsKey("merchant") ? routeArgs["merchant"]?.ToString() : "";
+                
+                if (string.IsNullOrEmpty(merchant))
+                {
+                    response.Message = "❌ Nome do estabelecimento não especificado.";
+                    return Json(response);
+                }
+                
+                invokeResult = await _disputes.AddDisputeWithMerchant(complaint ?? command, merchant);
+            }
+            else
+            {
+                var functionResult = await _kernel.InvokeAsync(plugin, function, routeArgs);
+                invokeResult = functionResult.GetValue<string>() ?? string.Empty;
             }
 
-            Console.WriteLine($"📤 Resposta enviada para o cliente");
+            var resultText = invokeResult?.ToString() ?? "Sem resposta";
+            response.Message = resultText;
+
+            // Dicas contextuais
+            if (function == "AddDispute" || function == "AddDisputeWithMerchant")
+            {
+                response.Message += "\n\n💡 Use 'listar reclamações' para ver todas as disputas.";
+            }
+            else if (function == "DeleteDispute")
+            {
+                response.Message += "\n\n✅ Reclamação removida com sucesso.";
+            }
+
+            Console.WriteLine($"📤 Resposta enviada: {response.Message}");
             return Json(response);
         }
         catch (Exception ex)
@@ -546,39 +324,42 @@ public class HomeController : Controller
             return Json(response);
         }
     }
+
     [HttpPost]
     public async Task<JsonResult> SearchBoletos([FromBody] CpfInput input)
     {
         try
         {
             var response = new ChatResponse();
-
+            
             if (string.IsNullOrWhiteSpace(input.CustomerCpf))
             {
                 response.Message = "❌ CPF não informado.";
                 return Json(response);
             }
 
-            // Se houver um estado de conversa na sessão, limpar estado ou anotar a busca
-            var state = GetConversationState();
-            if (state != null)
+            // Validação básica de CPF
+            var cleanCpf = new string(input.CustomerCpf.Where(char.IsDigit).ToArray());
+            if (cleanCpf.Length != 11)
             {
-                // Não limpamos o contexto aqui. Marcamos que uma consulta foi realizada
-                // para que mensagens subsequentes possam referenciar essa consulta.
-                state.CurrentStep = "consulta_realizada";
-                state.LastUpdate = DateTime.UtcNow;
-                // Preserve Zoop context marker so later messages still know this was a Zoop-related flow
-                if (!string.IsNullOrWhiteSpace(state.PreviousMessage) && state.PreviousMessage.IndexOf("zoop", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    state.ExpectedResponseType = "zoop_contexto";
-                }
-                // Reserva state.PreviousMessage e ConversationHistory
-                UpdateConversationState(state);
+                response.Message = "❌ CPF inválido. Deve conter 11 dígitos.";
+                return Json(response);
             }
 
-            response.Message += $"🔍 Consultando boletos para o CPF: {input.CustomerCpf}...\n";
+            var state = GetConversationState();
+            state.CurrentStep = "consulta_realizada";
+            state.LastUpdate = DateTime.UtcNow;
+            
+            if (!string.IsNullOrWhiteSpace(state.PreviousMessage) && state.PreviousMessage.IndexOf("zoop", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                state.ExpectedResponseType = "zoop_contexto";
+            }
+            
+            UpdateConversationState(state);
 
-            var result = await _boletoLookup.SearchByCpf(input.CustomerCpf);
+            response.Message = $"🔍 Consultando boletos para o CPF: {FormatCpf(cleanCpf)}...\n";
+            
+            var result = await _boletoLookup.SearchByCpf(cleanCpf);
             response.Message += $"\n{result}\n";
 
             return Json(response);
@@ -593,7 +374,63 @@ public class HomeController : Controller
         }
     }
 
-    // Coloca o enum e a função de detecção dentro da classe para visibilidade correta
+    [HttpPost]
+    public async Task<JsonResult> ProcessMerchant([FromBody] MerchantInput input)
+    {
+        try
+        {
+            var response = new ChatResponse();
+            
+            if (string.IsNullOrWhiteSpace(input.MerchantName))
+            {
+                response.Message = "❌ Nome do estabelecimento não informado.";
+                return Json(response);
+            }
+
+            var state = GetConversationState();
+            
+            if (state.CurrentStep != "aguardando_merchant" || string.IsNullOrEmpty(state.PreviousMessage))
+            {
+                response.Message = "❌ Contexto de reclamação não encontrado.";
+                return Json(response);
+            }
+
+            var merchantName = input.MerchantName.Trim();
+            
+            // Validação de conteúdo ofensivo
+            if (ContainsOffensiveContent(merchantName))
+            {
+                response.Message = "❌ Conteúdo inadequado detectado no nome do estabelecimento. Por favor, informe um nome apropriado.";
+                return Json(response);
+            }
+
+            state.AddToHistory(merchantName, "user");
+            UpdateConversationState(state);
+
+            // Cria a reclamação com o estabelecimento informado
+            var createResult = await _disputes.AddDisputeWithMerchant(state.PreviousMessage, merchantName);
+            
+            // Retorna ao estado normal
+            state.CurrentStep = "normal";
+            state.ExpectedResponseType = string.Empty;
+            UpdateConversationState(state);
+
+            response.Message = createResult;
+            return Json(response);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro em ProcessMerchant: {ex}");
+            var response = new ChatResponse
+            {
+                Message = $"\n❌ Erro ao processar estabelecimento:\n   {ex.Message}\n"
+            };
+            return Json(response);
+        }
+    }
+
+    #region Métodos Auxiliares
+
     private enum ConfirmationDecision
     {
         Unknown = 0,
@@ -601,115 +438,32 @@ public class HomeController : Controller
         Complaint = 2
     }
 
-    // IA-only: Analisa intenção do usuário (sem heurísticas locais)
-    private async Task<string> AnalyzeIntentAsync(string userMessage)
-    {
-        if (string.IsNullOrWhiteSpace(userMessage)) return "outro";
-
-        var prompt = $"""
-Você é um assistente que recebe mensagens de usuários sobre cobranças.
-Responda APENAS com UMA das labels abaixo (apenas a palavra):
-
-- consultar_zoop       (usuário quer apenas consultar boletos da Zoop)
-- reclamar_zoop        (usuário quer abrir reclamação contra a Zoop)
-- reclamar_outra       (usuário quer reclamar de outra empresa)
-- finalizar            (usuário está se despedindo/ agradecendo)
-- ambiguidade_zoop     (mensagem menciona Zoop mas não fica claro: consultar ou reclamar)
-- outro                (qualquer outra intenção)
-
-EXEMPLOS:
-"consultar boletos da Zoop" => consultar_zoop
-"quero abrir reclamação da Netflix" => reclamar_outra
-"listar minhas reclamações" => outro
-
-Mensagem: "{userMessage}"
-""";
-
-        try
-        {
-            var result = await _kernel.InvokePromptAsync(prompt);
-            return result.ToString().Trim().ToLower();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Erro em AnalyzeIntentAsync: {ex.Message}");
-            return "outro";
-        }
-    }
-
-    // Deterministic fallback intent analyzer that guarantees recognition of basic system commands
-    private async Task<string> AnalyzeUserIntent(string userMessage)
-    {
-        if (string.IsNullOrWhiteSpace(userMessage)) return "outro";
-        var lower = userMessage.ToLowerInvariant();
-
-        // PRIMEIRO: Fallback manual para comandos do sistema (prioritário)
-        if ((lower.Contains("listar") || lower.Contains("mostrar") || lower.Contains("ver")) &&
-            (lower.Contains("reclam") || lower.Contains("disput") || lower.Contains("ticket")))
-            return "listar_reclamacoes";
-
-        if ((lower.Contains("listar") || lower.Contains("mostrar") || lower.Contains("ver")) &&
-            (lower.Contains("empresa") || lower.Contains("estabelecimento")))
-            return "listar_empresas";
-
-        if (lower.Contains("consultar") || lower.Contains("ver boleto") || lower.Contains("ver boletos") || (lower.Contains("zoop") && lower.Contains("boleto")))
-            return "consulta_clara";
-
-        if (lower.Contains("reclamar") || lower.Contains("abrir reclama") || lower.Contains("problema com") || lower.Contains("indigna"))
-            return "reclamacao_clara";
-
-        if (lower.Contains("obrigad") || lower.Contains("tchau") || lower.Contains("sair") || lower.Contains("valeu"))
-            return "finalizacao";
-
-        if (lower.Contains("ajuda") || lower.Contains("como usar") || lower.Equals("oi"))
-            return "ajuda";
-
-        // DEPOIS: fallback para IA apenas para casos complexos
-        try
-        {
-            var prompt = $"""
-Analise se esta mensagem é sobre:
-- CONSULTAR boletos da Zoop
-- RECLAMAR de alguma empresa
-- LISTAR informações do sistema
-- FINALIZAR conversa
-- OUTRO assunto
-
-Mensagem: "{userMessage}"
-Responda apenas com uma palavra: consultar|reclamar|listar|finalizar|outro
-""";
-
-            var result = await _kernel.InvokePromptAsync(prompt);
-            var iaResult = result.ToString().Trim().ToLower();
-
-            return iaResult switch
-            {
-                "consultar" => "consulta_clara",
-                "reclamar" => "reclamacao_clara",
-                "listar" => "listar_reclamacoes",
-                "finalizar" => "finalizacao",
-                _ => "outro",
-            };
-        }
-        catch
-        {
-            return "outro";
-        }
-    }
-
-    // Usa IA para detectar se uma resposta curta indica CONSULTA ou RECLAMAÇÃO
     private async Task<ConfirmationDecision> DetectConfirmationViaAI(string userText)
     {
-        if (string.IsNullOrWhiteSpace(userText)) return ConfirmationDecision.Unknown;
+        if (string.IsNullOrWhiteSpace(userText)) 
+            return ConfirmationDecision.Unknown;
+            
         var prompt = $"""
-O usuário respondeu: "{userText}"\n\nClassifique como apenas uma das opções: CONSULTA ou RECLAMAÇÃO ou AMBÍGUO. Responda só com CONSULTA, RECLAMAÇÃO ou AMBIGUO.
+Analise se o usuário quer CONSULTAR boletos ou ABRIR RECLAMAÇÃO:
+
+Texto: "{userText}"
+
+Palavras-chave para CONSULTA: consultar, verificar, conferir, detalhes, informação, saber
+Palavras-chave para RECLAMAÇÃO: reclamar, indignação, problema, exigir, medidas, protesto
+
+Responda apenas com: CONSULTA ou RECLAMAÇÃO ou NAO_SEI
 """;
+        
         try
         {
             var res = await _kernel.InvokePromptAsync(prompt);
             var s = res.ToString().Trim().ToLower();
-            if (s.Contains("consulta") || s.Contains("consultar")) return ConfirmationDecision.Consult;
-            if (s.Contains("reclama") || s.Contains("reclamar")) return ConfirmationDecision.Complaint;
+            
+            if (s.Contains("consulta")) 
+                return ConfirmationDecision.Consult;
+            if (s.Contains("reclama")) 
+                return ConfirmationDecision.Complaint;
+                
             return ConfirmationDecision.Unknown;
         }
         catch
@@ -718,122 +472,69 @@ O usuário respondeu: "{userText}"\n\nClassifique como apenas uma das opções: 
         }
     }
 
-    // Extrai um resumo de valor simples (ex: R$ 715,00 ou 715,00) para exibição
-    private string ExtractAmountSummary(string message)
+    private bool ContainsZoopContext(string text)
     {
-        if (string.IsNullOrWhiteSpace(message)) return string.Empty;
-        var lower = message.ToLowerInvariant();
-        var m = System.Text.RegularExpressions.Regex.Match(lower, @"r\$\s*\d+[.,]\d{2}");
-        if (m.Success) return m.Value.ToUpper();
-        var m2 = System.Text.RegularExpressions.Regex.Match(lower, @"\d+[.,]\d{2}");
-        if (m2.Success) return m2.Value;
-        return string.Empty;
-    }
-
-    // Detecta se a mensagem contém detalhes típicos de boletos (valores, datas, banco, linha digitável)
-    private bool IsDetailedZoopContext(string message)
-    {
-        if (string.IsNullOrWhiteSpace(message)) return false;
-        var lower = message.ToLowerInvariant();
-
-        // Palavras-chave que indicam detalhe de boleto/compra
-        var keywords = new[] { "boleto", "linha digitável", "vencimento", "venc", "banco", "agência", "conta", "r$", "rs", "reais", "data", "nf", "nota", "fatura", "parcelas" };
-        if (keywords.Any(k => lower.Contains(k))) return true;
-
-        // Valores em formato numérico (ex: 150,00 ou 150.00)
-        if (Regex.IsMatch(lower, @"\d+[.,]\d{2}")) return true;
-
-        // datas simples
-        if (Regex.IsMatch(lower, @"\d{1,2}/\d{1,2}/\d{2,4}")) return true;
-
-        return false;
-    }
-
-    // Obtém ou cria um session id baseado em cookie ou header
-    private string GetSessionIdFromRequest()
-    {
-        try
-        {
-            // 1) tenta header X-Session-Id
-            if (Request.Headers.TryGetValue("X-Session-Id", out var headerVal) && !string.IsNullOrWhiteSpace(headerVal))
-            {
-                return headerVal.ToString();
-            }
-
-            // 2) tenta cookie
-            if (Request.Cookies.TryGetValue("sessionId", out var cookieVal) && !string.IsNullOrWhiteSpace(cookieVal))
-            {
-                return cookieVal;
-            }
-
-            // 3) cria novo session id e envia cookie
-            var newId = Guid.NewGuid().ToString();
-            Response.Cookies.Append("sessionId", newId, new Microsoft.AspNetCore.Http.CookieOptions { HttpOnly = true, Expires = DateTimeOffset.UtcNow.AddHours(2) });
-            return newId;
-        }
-        catch
-        {
-            return Guid.NewGuid().ToString();
-        }
-    }
-
-    // Heurística para extrair apenas o nome do estabelecimento da resposta do usuário
-    private string ExtractEstablishmentName(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+            
         var lower = text.ToLowerInvariant();
+        var zoopKeywords = new[] 
+        { 
+            "zoop", "zoo p", "zoo.", "zoop brasil", "zoop brasil", 
+            "boletos zoop", "cobrança zoop", "cobranca zoop", "empresa zoop",
+            "zoop brasil que nunca", "zoop brasil que nunca ouvi"
+        };
+        
+        return zoopKeywords.Any(keyword => lower.Contains(keyword));
+    }
 
-        // Checa lista simples de merchants conhecidos
-        var known = new[] { "netflix", "amazon", "spotify", "uber", "ifood", "google", "apple", "zoop" };
-        foreach (var k in known)
-        {
-            if (lower.Contains(k)) return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(k);
-        }
-
-        // Se não encontrou, tenta limpar pontuação e retornar a primeira palavra (heurística)
-        var cleaned = Regex.Replace(text, @"[^a-zA-Z0-9\s]", "").Trim();
-        var parts = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 1)
-            return parts[0];
-
-        // Se não for claro, tenta perguntar novamente (vazio significa não extraído)
-        // Em vez de retornar vazio, também pode retornar uma versão curta do texto para permitir aceitação
-        var shortCandidate = parts.Length > 0 ? parts.Take(3) : parts;
-        return string.Join(' ', shortCandidate);
+    private string FormatCpf(string cpf)
+    {
+        if (string.IsNullOrEmpty(cpf) || cpf.Length != 11)
+            return cpf;
+            
+        return $"{cpf[..3]}.{cpf[3..6]}.{cpf[6..9]}-{cpf[9..]}";
     }
 
     private bool ContainsOffensiveContent(string? text)
     {
-        if (string.IsNullOrWhiteSpace(text)) return false;
-        // Palavras ofensivas removidas a pedido do usuário. A função permanece para reativação futura.
+        if (string.IsNullOrWhiteSpace(text)) 
+            return false;
+            
         var offensiveWords = new string[] { };
         var lower = text.ToLowerInvariant();
         return offensiveWords.Any(w => lower.Contains(w));
     }
 
-    // ConversationState stored in ASP.NET Session
+    #endregion
+
+    #region Gerenciamento de Estado da Conversação
+
     public class ConversationState
     {
         public string CurrentStep { get; set; } = "normal";
         public string PreviousMessage { get; set; } = string.Empty;
         public string ExpectedResponseType { get; set; } = string.Empty;
-        // Histórico completo da conversa (mantemos apenas últimas N entradas)
         public List<string> ConversationHistory { get; set; } = new();
         public DateTime LastUpdate { get; set; } = DateTime.UtcNow;
 
-        // Adiciona uma mensagem ao histórico e mantém o tamanho limitado
         public void AddToHistory(string message, string sender = "user")
         {
-            if (string.IsNullOrWhiteSpace(message)) return;
+            if (string.IsNullOrWhiteSpace(message)) 
+                return;
+                
             ConversationHistory.Add($"{sender}: {message}");
             if (ConversationHistory.Count > 10)
                 ConversationHistory.RemoveAt(0);
+                
             LastUpdate = DateTime.UtcNow;
         }
 
         public string GetContextSummary()
         {
-            if (ConversationHistory == null || ConversationHistory.Count == 0) return string.Empty;
+            if (ConversationHistory == null || ConversationHistory.Count == 0) 
+                return string.Empty;
+                
             var recent = ConversationHistory.Skip(Math.Max(0, ConversationHistory.Count - 3)).ToList();
             return string.Join(" | ", recent);
         }
@@ -849,6 +550,7 @@ O usuário respondeu: "{userText}"\n\nClassifique como apenas uma das opções: 
             {
                 return JsonSerializer.Deserialize<ConversationState>(json) ?? new ConversationState();
             }
+            
             var newState = new ConversationState();
             HttpContext.Session.SetString(sessionKey, JsonSerializer.Serialize(newState));
             return newState;
@@ -873,6 +575,7 @@ O usuário respondeu: "{userText}"\n\nClassifique como apenas uma das opções: 
         HttpContext.Session.Remove("ConversationState");
     }
 
+    #endregion
 }
 
 // Model classes
@@ -883,8 +586,8 @@ public class ChatInput
 
 public class ConfirmationInput
 {
-    public string Type { get; set; } = string.Empty; // ex: "zoop_intent"
-    public string UserResponse { get; set; } = string.Empty; // texto natural do usuário
+    public string Type { get; set; } = string.Empty;
+    public string UserResponse { get; set; } = string.Empty;
 }
 
 public class NameInput
@@ -897,13 +600,17 @@ public class CpfInput
     public string CustomerCpf { get; set; } = string.Empty;
 }
 
+public class MerchantInput
+{
+    public string MerchantName { get; set; } = string.Empty;
+}
+
 public class ChatResponse
 {
     public string Message { get; set; } = string.Empty;
     public bool RequiresNameInput { get; set; }
     public bool RequiresCpfInput { get; set; }
     public bool IsExit { get; set; }
-    // Novas propriedades para confirmação
     public bool RequiresConfirmation { get; set; }
     public string? ConfirmationType { get; set; }
 }
